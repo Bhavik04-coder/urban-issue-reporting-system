@@ -1,0 +1,401 @@
+description,department
+Dirty water coming from taps in residential block A,water_dept
+Very low water pressure in hospital lane,water_dept
+Water pipe damaged near railway colony,water_dept
+Tanker water not arriving at bus stop,water_dept
+Water line blockage at sector 5,water_dept
+Water leakage reported near hospital lane,water_dept
+No water supply in the school road area,water_dept
+Tanker water not arriving at sector 5,water_dept
+Water line blockage at railway colony,water_dept
+Dirty water coming from taps in highway point,water_dept
+Very low water pressure in sector 5,water_dept
+Water leakage reported near hospital lane,water_dept
+Water pipe damaged near hospital lane,water_dept
+Tanker water not arriving at green park,water_dept
+Dirty water coming from taps in sector 5,water_dept
+Pipeline burst causing flooding at hospital lane,water_dept
+Water pipe damaged near green park,water_dept
+Water tank overflowing in market area,water_dept
+Tanker water not arriving at sector 5,water_dept
+Water leakage reported near bus stop,water_dept
+Water leakage reported near bus stop,water_dept
+Very low water pressure in hospital lane,water_dept
+Water line blockage at highway point,water_dept
+Dirty water coming from taps in green park,water_dept
+No water supply in the main road area,water_dept
+Tanker water not arriving at main road,water_dept
+Dirty water coming from taps in railway colony,water_dept
+No water supply in the hospital lane area,water_dept
+Water leakage reported near bus stop,water_dept
+Water tank overflowing in green park,water_dept
+Water line blockage at market area,water_dept
+Water line blockage at hospital lane,water_dept
+Water leakage reported near school road,water_dept
+Water pipe damaged near hospital lane,water_dept
+Water pipe damaged near residential block A,water_dept
+Water tank overflowing in residential block A,water_dept
+Water line blockage at bus stop,water_dept
+Water line blockage at residential block A,water_dept
+No water supply in the school road area,water_dept
+Water tank overflowing in school road,water_dept
+Water line blockage at residential block A,water_dept
+Very low water pressure in market area,water_dept
+Very low water pressure in highway point,water_dept
+Pipeline burst causing flooding at sector 5,water_dept
+Very low water pressure in market area,water_dept
+Water tank overflowing in hospital lane,water_dept
+Water tank overflowing in main road,water_dept
+Dirty water coming from taps in sector 5,water_dept
+No water supply in the highway point area,water_dept
+Very low water pressure in sector 5,water_dept
+Water tank overflowing in highway point,water_dept
+Water pipe damaged near residential block A,water_dept
+Water tank overflowing in green park,water_dept
+Water line blockage at green park,water_dept
+No water supply in the main road area,water_dept
+No water supply in the school road area,water_dept
+Dirty water coming from taps in sector 5,water_dept
+Water line blockage at bus stop,water_dept
+Dirty water coming from taps in green park,water_dept
+Pipeline burst causing flooding at market area,water_dept
+Dirty water coming from taps in sector 5,water_dept
+Dirty water coming from taps in residential block A,water_dept
+Tanker water not arriving at hospital lane,water_dept
+Water pipe damaged near sector 5,water_dept
+Very low water pressure in green park,water_dept
+Water pipe damaged near sector 5,water_dept
+Very low water pressure in hospital lane,water_dept
+Very low water pressure in sector 5,water_dept
+Very low water pressure in bus stop,water_dept
+Dirty water coming from taps in green park,water_dept
+Pipeline burst causing flooding at hospital lane,water_dept
+Water line blockage at green park,water_dept
+Pipeline burst causing flooding at hospital lane,water_dept
+No water supply in the main road area,water_dept
+Water pipe damaged near railway colony,water_dept
+Water tank overflowing in school road,water_dept
+Water line blockage at green park,water_dept
+Water leakage reported near hospital lane,water_dept
+Dirty water coming from taps in highway point,water_dept
+Water supply stopped since morning in green park,water_dept
+Water pipe damaged near residential block A,water_dept
+No water supply in the residential block A area,water_dept
+Water line blockage at hospital lane,water_dept
+Water pipe damaged near green park,water_dept
+Water leakage reported near market area,water_dept
+Water supply stopped since morning in sector 5,water_dept
+Tanker water not arriving at sector 5,water_dept
+Tanker water not arriving at highway point,water_dept
+Tanker water not arriving at green park,water_dept
+Dirty water coming from taps in highway point,water_dept
+Water pipe damaged near highway point,water_dept
+Water supply stopped since morning in sector 5,water_dept
+No water supply in the main road area,water_dept
+Pipeline burst causing flooding at sector 5,water_dept
+Water leakage reported near market area,water_dept
+Very low water pressure in market area,water_dept
+Dirty water coming from taps in sector 5,water_dept
+Water leakage reported near sector 5,water_dept
+Dirty water coming from taps in hospital lane,water_dept
+No water supply in the hospital lane area,water_dept
+Power outage in railway colony,electricity_dept
+Transformer issue reported at main road,electricity_dept
+Voltage fluctuation in market area,electricity_dept
+Power outage in school road,electricity_dept
+Electric pole wire hanging at school road,electricity_dept
+High electricity bill complaint from highway point,electricity_dept
+High electricity bill complaint from market area,electricity_dept
+Power outage in residential block A,electricity_dept
+Electricity cut since morning in highway point,electricity_dept
+Meter malfunction reported in green park,electricity_dept
+Electricity cut since morning in residential block A,electricity_dept
+Short circuit incident near sector 5,electricity_dept
+Short circuit incident near main road,electricity_dept
+High electricity bill complaint from green park,electricity_dept
+Meter malfunction reported in bus stop,electricity_dept
+Voltage fluctuation in railway colony,electricity_dept
+Voltage fluctuation in railway colony,electricity_dept
+Streetlight not working near school road,electricity_dept
+Transformer issue reported at bus stop,electricity_dept
+Electricity cut since morning in sector 5,electricity_dept
+Transformer issue reported at highway point,electricity_dept
+Electric pole wire hanging at main road,electricity_dept
+Electric pole wire hanging at highway point,electricity_dept
+High electricity bill complaint from school road,electricity_dept
+Frequent power tripping in market area,electricity_dept
+Electric pole wire hanging at market area,electricity_dept
+Power outage in bus stop,electricity_dept
+Short circuit incident near highway point,electricity_dept
+Voltage fluctuation in railway colony,electricity_dept
+Transformer issue reported at hospital lane,electricity_dept
+Electric pole wire hanging at hospital lane,electricity_dept
+Frequent power tripping in main road,electricity_dept
+Streetlight not working near school road,electricity_dept
+Power outage in bus stop,electricity_dept
+Streetlight not working near green park,electricity_dept
+Frequent power tripping in hospital lane,electricity_dept
+Voltage fluctuation in market area,electricity_dept
+Voltage fluctuation in green park,electricity_dept
+Transformer issue reported at residential block A,electricity_dept
+Meter malfunction reported in school road,electricity_dept
+Meter malfunction reported in railway colony,electricity_dept
+Short circuit incident near main road,electricity_dept
+Meter malfunction reported in main road,electricity_dept
+Electricity cut since morning in hospital lane,electricity_dept
+Short circuit incident near highway point,electricity_dept
+Frequent power tripping in highway point,electricity_dept
+High electricity bill complaint from highway point,electricity_dept
+Transformer issue reported at residential block A,electricity_dept
+Electricity cut since morning in highway point,electricity_dept
+High electricity bill complaint from highway point,electricity_dept
+Electricity cut since morning in railway colony,electricity_dept
+Streetlight not working near highway point,electricity_dept
+High electricity bill complaint from green park,electricity_dept
+Voltage fluctuation in sector 5,electricity_dept
+Electric pole wire hanging at main road,electricity_dept
+Frequent power tripping in main road,electricity_dept
+Power outage in hospital lane,electricity_dept
+Power outage in market area,electricity_dept
+Streetlight not working near highway point,electricity_dept
+Streetlight not working near main road,electricity_dept
+Transformer issue reported at market area,electricity_dept
+Transformer issue reported at green park,electricity_dept
+Frequent power tripping in bus stop,electricity_dept
+Electricity cut since morning in highway point,electricity_dept
+Transformer issue reported at sector 5,electricity_dept
+Frequent power tripping in main road,electricity_dept
+Short circuit incident near hospital lane,electricity_dept
+Meter malfunction reported in railway colony,electricity_dept
+Frequent power tripping in sector 5,electricity_dept
+Voltage fluctuation in railway colony,electricity_dept
+Meter malfunction reported in highway point,electricity_dept
+Power outage in hospital lane,electricity_dept
+Electricity cut since morning in green park,electricity_dept
+Streetlight not working near green park,electricity_dept
+High electricity bill complaint from bus stop,electricity_dept
+Short circuit incident near bus stop,electricity_dept
+Voltage fluctuation in sector 5,electricity_dept
+Electricity cut since morning in railway colony,electricity_dept
+High electricity bill complaint from hospital lane,electricity_dept
+Voltage fluctuation in highway point,electricity_dept
+Power outage in green park,electricity_dept
+Electricity cut since morning in highway point,electricity_dept
+Electricity cut since morning in school road,electricity_dept
+Transformer issue reported at highway point,electricity_dept
+Meter malfunction reported in bus stop,electricity_dept
+Frequent power tripping in railway colony,electricity_dept
+Electric pole wire hanging at bus stop,electricity_dept
+High electricity bill complaint from school road,electricity_dept
+High electricity bill complaint from market area,electricity_dept
+Frequent power tripping in main road,electricity_dept
+Meter malfunction reported in main road,electricity_dept
+Electric pole wire hanging at main road,electricity_dept
+Short circuit incident near hospital lane,electricity_dept
+Frequent power tripping in hospital lane,electricity_dept
+Electric pole wire hanging at market area,electricity_dept
+Frequent power tripping in main road,electricity_dept
+Electric pole wire hanging at railway colony,electricity_dept
+Meter malfunction reported in sector 5,electricity_dept
+Electric pole wire hanging at bus stop,electricity_dept
+Voltage fluctuation in market area,electricity_dept
+Speed breaker damaged at green park,road_dept
+Road waterlogging issue in railway colony,road_dept
+Manhole cover missing at school road,road_dept
+Road waterlogging issue in school road,road_dept
+Manhole cover missing at main road,road_dept
+Large pothole near market area,road_dept
+Road uneven surface causing accidents in highway point,road_dept
+Footpath broken in school road,road_dept
+Speed breaker damaged at sector 5,road_dept
+Road blocked due to construction near bus stop,road_dept
+Street signboard broken at main road,road_dept
+Manhole cover missing at railway colony,road_dept
+Footpath broken in railway colony,road_dept
+Road waterlogging issue in bus stop,road_dept
+Street signboard broken at railway colony,road_dept
+Road repair needed in market area,road_dept
+Road uneven surface causing accidents in residential block A,road_dept
+Road waterlogging issue in market area,road_dept
+Large pothole near hospital lane,road_dept
+Road blocked due to construction near sector 5,road_dept
+Road damaged badly at main road,road_dept
+Road damaged badly at main road,road_dept
+Speed breaker damaged at market area,road_dept
+Manhole cover missing at school road,road_dept
+Large pothole near bus stop,road_dept
+Road repair needed in main road,road_dept
+Large pothole near green park,road_dept
+Street signboard broken at sector 5,road_dept
+Manhole cover missing at sector 5,road_dept
+Road uneven surface causing accidents in bus stop,road_dept
+Road waterlogging issue in market area,road_dept
+Large pothole near highway point,road_dept
+Road damaged badly at hospital lane,road_dept
+Manhole cover missing at school road,road_dept
+Footpath broken in market area,road_dept
+Road waterlogging issue in green park,road_dept
+Road uneven surface causing accidents in green park,road_dept
+Road repair needed in hospital lane,road_dept
+Road repair needed in bus stop,road_dept
+Road repair needed in green park,road_dept
+Road damaged badly at railway colony,road_dept
+Manhole cover missing at railway colony,road_dept
+Speed breaker damaged at railway colony,road_dept
+Speed breaker damaged at main road,road_dept
+Road repair needed in residential block A,road_dept
+Street signboard broken at market area,road_dept
+Speed breaker damaged at bus stop,road_dept
+Road damaged badly at main road,road_dept
+Road uneven surface causing accidents in school road,road_dept
+Manhole cover missing at sector 5,road_dept
+Road waterlogging issue in railway colony,road_dept
+Road blocked due to construction near green park,road_dept
+Manhole cover missing at highway point,road_dept
+Road uneven surface causing accidents in residential block A,road_dept
+Footpath broken in main road,road_dept
+Road uneven surface causing accidents in highway point,road_dept
+Footpath broken in hospital lane,road_dept
+Road blocked due to construction near sector 5,road_dept
+Street signboard broken at main road,road_dept
+Speed breaker damaged at railway colony,road_dept
+Footpath broken in hospital lane,road_dept
+Street signboard broken at railway colony,road_dept
+Speed breaker damaged at bus stop,road_dept
+Footpath broken in residential block A,road_dept
+Road damaged badly at market area,road_dept
+Speed breaker damaged at highway point,road_dept
+Road repair needed in residential block A,road_dept
+Large pothole near hospital lane,road_dept
+Road uneven surface causing accidents in highway point,road_dept
+Road waterlogging issue in bus stop,road_dept
+Road waterlogging issue in sector 5,road_dept
+Road blocked due to construction near railway colony,road_dept
+Road damaged badly at sector 5,road_dept
+Road damaged badly at sector 5,road_dept
+Road repair needed in market area,road_dept
+Road blocked due to construction near main road,road_dept
+Road waterlogging issue in main road,road_dept
+Speed breaker damaged at highway point,road_dept
+Manhole cover missing at school road,road_dept
+Street signboard broken at bus stop,road_dept
+Road repair needed in green park,road_dept
+Manhole cover missing at bus stop,road_dept
+Speed breaker damaged at bus stop,road_dept
+Footpath broken in school road,road_dept
+Street signboard broken at green park,road_dept
+Road repair needed in market area,road_dept
+Road blocked due to construction near highway point,road_dept
+Road blocked due to construction near green park,road_dept
+Street signboard broken at market area,road_dept
+Footpath broken in railway colony,road_dept
+Speed breaker damaged at sector 5,road_dept
+Manhole cover missing at hospital lane,road_dept
+Road blocked due to construction near green park,road_dept
+Street signboard broken at hospital lane,road_dept
+Street signboard broken at hospital lane,road_dept
+Road waterlogging issue in market area,road_dept
+Road waterlogging issue in railway colony,road_dept
+Road waterlogging issue in green park,road_dept
+Road blocked due to construction near school road,road_dept
+Road uneven surface causing accidents in residential block A,road_dept
+Sewage overflow reported at railway colony,sanitation_dept
+Stagnant water causing mosquitoes in main road,sanitation_dept
+Public toilet cleaning needed in residential block A,sanitation_dept
+Drainage blockage near main road,sanitation_dept
+Garbage not collected in school road,sanitation_dept
+Garbage pile increasing in green park,sanitation_dept
+Dustbins overflowing at residential block A,sanitation_dept
+Garbage pile increasing in green park,sanitation_dept
+Sewage overflow reported at sector 5,sanitation_dept
+Drain choked with plastic near railway colony,sanitation_dept
+Drainage blockage near residential block A,sanitation_dept
+Dustbins overflowing at market area,sanitation_dept
+Improper waste dumping at railway colony,sanitation_dept
+Garbage pile increasing in hospital lane,sanitation_dept
+Garbage pile increasing in main road,sanitation_dept
+Dustbins overflowing at main road,sanitation_dept
+Drain choked with plastic near main road,sanitation_dept
+Drain choked with plastic near highway point,sanitation_dept
+Public toilet cleaning needed in main road,sanitation_dept
+Sewage overflow reported at market area,sanitation_dept
+Garbage not collected in hospital lane,sanitation_dept
+Stagnant water causing mosquitoes in school road,sanitation_dept
+Dead animal removal needed at green park,sanitation_dept
+Garbage pile increasing in highway point,sanitation_dept
+Garbage not collected in sector 5,sanitation_dept
+Dustbins overflowing at sector 5,sanitation_dept
+Dustbins overflowing at highway point,sanitation_dept
+Garbage not collected in main road,sanitation_dept
+Improper waste dumping at railway colony,sanitation_dept
+Drain choked with plastic near highway point,sanitation_dept
+Garbage not collected in green park,sanitation_dept
+Public toilet cleaning needed in highway point,sanitation_dept
+Stagnant water causing mosquitoes in green park,sanitation_dept
+Public toilet cleaning needed in green park,sanitation_dept
+Stagnant water causing mosquitoes in railway colony,sanitation_dept
+Garbage not collected in market area,sanitation_dept
+Drain choked with plastic near railway colony,sanitation_dept
+Dead animal removal needed at railway colony,sanitation_dept
+Improper waste dumping at bus stop,sanitation_dept
+Dustbins overflowing at hospital lane,sanitation_dept
+Dead animal removal needed at railway colony,sanitation_dept
+Dustbins overflowing at main road,sanitation_dept
+Sewage overflow reported at school road,sanitation_dept
+Drainage blockage near sector 5,sanitation_dept
+Public toilet cleaning needed in residential block A,sanitation_dept
+Dead animal removal needed at highway point,sanitation_dept
+Dead animal removal needed at green park,sanitation_dept
+Sewage overflow reported at highway point,sanitation_dept
+Public toilet cleaning needed in sector 5,sanitation_dept
+Dustbins overflowing at highway point,sanitation_dept
+Sewage overflow reported at railway colony,sanitation_dept
+Dead animal removal needed at highway point,sanitation_dept
+Dustbins overflowing at school road,sanitation_dept
+Garbage pile increasing in railway colony,sanitation_dept
+Improper waste dumping at residential block A,sanitation_dept
+Garbage pile increasing in hospital lane,sanitation_dept
+Public toilet cleaning needed in sector 5,sanitation_dept
+Sewage overflow reported at residential block A,sanitation_dept
+Dustbins overflowing at sector 5,sanitation_dept
+Garbage not collected in highway point,sanitation_dept
+Garbage not collected in main road,sanitation_dept
+Sewage overflow reported at school road,sanitation_dept
+Dustbins overflowing at hospital lane,sanitation_dept
+Improper waste dumping at railway colony,sanitation_dept
+Drain choked with plastic near railway colony,sanitation_dept
+Public toilet cleaning needed in highway point,sanitation_dept
+Dead animal removal needed at main road,sanitation_dept
+Dustbins overflowing at highway point,sanitation_dept
+Drain choked with plastic near school road,sanitation_dept
+Drain choked with plastic near residential block A,sanitation_dept
+Garbage pile increasing in bus stop,sanitation_dept
+Public toilet cleaning needed in highway point,sanitation_dept
+Public toilet cleaning needed in main road,sanitation_dept
+Sewage overflow reported at sector 5,sanitation_dept
+Drainage blockage near residential block A,sanitation_dept
+Sewage overflow reported at sector 5,sanitation_dept
+Drain choked with plastic near railway colony,sanitation_dept
+Garbage pile increasing in railway colony,sanitation_dept
+Improper waste dumping at green park,sanitation_dept
+Improper waste dumping at residential block A,sanitation_dept
+Drain choked with plastic near hospital lane,sanitation_dept
+Sewage overflow reported at hospital lane,sanitation_dept
+Garbage pile increasing in main road,sanitation_dept
+Sewage overflow reported at sector 5,sanitation_dept
+Improper waste dumping at bus stop,sanitation_dept
+Public toilet cleaning needed in sector 5,sanitation_dept
+Garbage not collected in green park,sanitation_dept
+Garbage not collected in residential block A,sanitation_dept
+Sewage overflow reported at hospital lane,sanitation_dept
+Garbage not collected in main road,sanitation_dept
+Garbage pile increasing in hospital lane,sanitation_dept
+Sewage overflow reported at highway point,sanitation_dept
+Stagnant water causing mosquitoes in main road,sanitation_dept
+Dustbins overflowing at highway point,sanitation_dept
+Drainage blockage near residential block A,sanitation_dept
+Dead animal removal needed at market area,sanitation_dept
+Garbage not collected in sector 5,sanitation_dept
+Garbage pile increasing in market area,sanitation_dept
+Drainage blockage near highway point,sanitation_dept
+Dead animal removal needed at railway colony,sanitation_dept
