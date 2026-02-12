@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import and_, func
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator
 import re
 import random
 import json
@@ -44,13 +44,13 @@ class UserCreateEnhanced(BaseModel):
     mobile_number: str
     is_admin: bool = False
 
-    @validator('password')
+    @field_validator('password')
     def password_strength(cls, v):
         if len(v) < 6:
             raise ValueError('Password must be at least 6 characters long')
         return v
 
-    @validator('full_name')
+    @field_validator('full_name')
     def validate_full_name(cls, v):
         if not v or not v.strip():
             raise ValueError('Full name cannot be empty')
@@ -60,7 +60,7 @@ class UserCreateEnhanced(BaseModel):
             raise ValueError('Full name can only contain letters, spaces and underscores')
         return v.strip()
 
-    @validator('mobile_number')
+    @field_validator('mobile_number')
     def validate_mobile_number(cls, v):
         if not re.match(r'^\d{10}$', v):
             raise ValueError('Mobile number must be exactly 10 digits')
@@ -93,7 +93,7 @@ class ReportCreate(BaseModel):
     prediction_confidence: Optional[float] = None
     
     # Validation
-    @validator('user_name')
+    @field_validator('user_name')
     def validate_user_name(cls, v):
         if not v or not v.strip():
             raise ValueError('Full name cannot be empty')
@@ -101,20 +101,20 @@ class ReportCreate(BaseModel):
             raise ValueError('Full name must be at least 2 characters long')
         return v.strip()
 
-    @validator('user_mobile')
+    @field_validator('user_mobile')
     def validate_user_mobile(cls, v):
         if not re.match(r'^\d{10}$', v):
             raise ValueError('Mobile number must be exactly 10 digits')
         return v
 
-    @validator('urgency_level')
+    @field_validator('urgency_level')
     def validate_urgency_level(cls, v):
         valid_urgency_levels = ["High", "Medium", "Low"]
         if v not in valid_urgency_levels:
             raise ValueError(f'Urgency level must be one of: {", ".join(valid_urgency_levels)}')
         return v
 
-    @validator('title')
+    @field_validator('title')
     def validate_title(cls, v):
         if not v or not v.strip():
             raise ValueError('Title cannot be empty')
@@ -122,7 +122,7 @@ class ReportCreate(BaseModel):
             raise ValueError('Title must be at least 5 characters long')
         return v.strip()
 
-    @validator('description')
+    @field_validator('description')
     def validate_description(cls, v):
         if not v or not v.strip():
             raise ValueError('Description cannot be empty')
@@ -130,19 +130,19 @@ class ReportCreate(BaseModel):
             raise ValueError('Description must be at least 10 characters long')
         return v.strip()
 
-    @validator('location_lat')
+    @field_validator('location_lat')
     def validate_latitude(cls, v):
         if not -90 <= v <= 90:
             raise ValueError('Latitude must be between -90 and 90')
         return v
 
-    @validator('location_long')
+    @field_validator('location_long')
     def validate_longitude(cls, v):
         if not -180 <= v <= 180:
             raise ValueError('Longitude must be between -180 and 180')
         return v
 
-    @validator('department')
+    @field_validator('department')
     def validate_department(cls, v):
         valid_depts = ["water_dept", "road_dept", "sanitation_dept", "electricity_dept", "other"]
         if v and v not in valid_depts:
@@ -603,7 +603,7 @@ async def update_users_me(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    update_data = profile_data.dict(exclude_unset=True)
+    update_data = profile_data.model_dump(exclude_unset=True)
 
     for field, value in update_data.items():
         setattr(current_user, field, value)
@@ -2014,7 +2014,7 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     mobile_number: Optional[str] = None
 
-    @validator('full_name')
+    @field_validator('full_name')
     def validate_full_name(cls, v):
         if v is not None:
             if not v.strip():
@@ -2025,7 +2025,7 @@ class UserProfileUpdate(BaseModel):
                 raise ValueError('Full name can only contain letters, spaces and underscores')
         return v.strip() if v else v
 
-    @validator('mobile_number')
+    @field_validator('mobile_number')
     def validate_mobile_number(cls, v):
         if v is not None:
             if not re.match(r'^\d{10}$', v):

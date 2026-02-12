@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional, List
 import re
 from datetime import datetime
@@ -28,13 +28,13 @@ class UserCreate(BaseModel):
     mobile_number: str
     is_admin: bool = False
 
-    @validator('password')
+    @field_validator('password')
     def password_strength(cls, v):
         if len(v) < 6:
             raise ValueError('Password must be at least 6 characters long')
         return v
 
-    @validator('full_name')
+    @field_validator('full_name')
     def validate_full_name(cls, v):
         if not v or not v.strip():
             raise ValueError('Full name cannot be empty')
@@ -44,13 +44,13 @@ class UserCreate(BaseModel):
             raise ValueError('Full name can only contain letters, spaces and underscores')
         return v.strip()
 
-    @validator('mobile_number')
+    @field_validator('mobile_number')
     def validate_mobile_number(cls, v):
         if not re.match(r'^\d{10}$', v):
             raise ValueError('Mobile number must be exactly 10 digits')
         return v
 
-    @validator('is_admin')
+    @field_validator('is_admin')
     def validate_admin_role(cls, v):
         if v:
             raise ValueError('Cannot self-assign admin role during signup')
@@ -63,14 +63,13 @@ class UserResponse(BaseModel):
     mobile_number: str
     is_admin: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
     
-    @validator('password')
+    @field_validator('password')
     def password_not_empty(cls, v):
         if not v or len(v) < 1:
             raise ValueError('Password cannot be empty')
@@ -90,7 +89,7 @@ class ReportCreate(BaseModel):
     auto_assigned: Optional[bool] = False
     prediction_confidence: Optional[float] = None
     
-    @validator('user_name')
+    @field_validator('user_name')
     def validate_user_name(cls, v):
         if not v or not v.strip():
             raise ValueError('Full name cannot be empty')
@@ -98,27 +97,27 @@ class ReportCreate(BaseModel):
             raise ValueError('Full name must be at least 2 characters long')
         return v.strip()
 
-    @validator('user_mobile')
+    @field_validator('user_mobile')
     def validate_user_mobile(cls, v):
         if not re.match(r'^\d{10}$', v):
             raise ValueError('Mobile number must be exactly 10 digits')
         return v
 
-    # @validator('category')
+    # @field_validator('category')
     # def validate_category(cls, v):
     #     valid_categories = ["Garbage", "Water", "Sanitation", "Other"]
     #     if v not in valid_categories:
     #         raise ValueError(f'Category must be one of: {", ".join(valid_categories)}')
     #     return v
 
-    @validator('urgency_level')
+    @field_validator('urgency_level')
     def validate_urgency_level(cls, v):
         valid_urgency_levels = ["Low", "Medium", "High", "Urgent"]
         if v not in valid_urgency_levels:
             raise ValueError(f'Urgency level must be one of: {", ".join(valid_urgency_levels)}')
         return v
 
-    @validator('title')
+    @field_validator('title')
     def validate_title(cls, v):
         if not v or not v.strip():
             raise ValueError('Title cannot be empty')
@@ -128,7 +127,7 @@ class ReportCreate(BaseModel):
             raise ValueError('Title cannot exceed 100 characters')
         return v.strip()
 
-    @validator('description')
+    @field_validator('description')
     def validate_description(cls, v):
         if not v or not v.strip():
             raise ValueError('Description cannot be empty')
@@ -138,13 +137,13 @@ class ReportCreate(BaseModel):
             raise ValueError('Description cannot exceed 1000 characters')
         return v.strip()
 
-    @validator('location_lat')
+    @field_validator('location_lat')
     def validate_latitude(cls, v):
         if not -90 <= v <= 90:
             raise ValueError('Latitude must be between -90 and 90')
         return v
 
-    @validator('location_long')
+    @field_validator('location_long')
     def validate_longitude(cls, v):
         if not -180 <= v <= 180:
             raise ValueError('Longitude must be between -180 and 180')
@@ -173,8 +172,7 @@ class ReportResponse(BaseModel):
     updated_at: datetime
     user_id: Optional[int]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReportCreateWithMedia(BaseModel):
     user_name: str
@@ -217,7 +215,7 @@ class StatusResponse(BaseModel):
 class StatusUpdate(BaseModel):
     status: str  # "Pending", "In Progress", "Resolved"
 
-    @validator('status')
+    @field_validator('status')
     def validate_status(cls, v):
         valid_statuses = ["Pending", "In Progress", "Resolved"]
         if v not in valid_statuses:
@@ -252,7 +250,7 @@ class DepartmentFeedbackRequest(BaseModel):
     rating: Optional[int] = None
     user_name: Optional[str] = None
 
-    @validator('feedback_text')
+    @field_validator('feedback_text')
     def validate_feedback_text(cls, v):
         if not v or not v.strip():
             raise ValueError('Feedback text cannot be empty')
@@ -262,7 +260,7 @@ class DepartmentFeedbackRequest(BaseModel):
             raise ValueError('Feedback cannot exceed 1000 characters')
         return v.strip()
 
-    @validator('rating')
+    @field_validator('rating')
     def validate_rating(cls, v):
         if v is not None and (v < 1 or v > 5):
             raise ValueError('Rating must be between 1 and 5')
@@ -273,14 +271,14 @@ class StatusUpdateRequest(BaseModel):
     issue_ids: List[int]
     new_status: str
 
-    @validator('new_status')
+    @field_validator('new_status')
     def validate_status(cls, v):
         valid_statuses = ["Pending", "In Progress", "Resolved"]
         if v not in valid_statuses:
             raise ValueError(f'Status must be one of: {", ".join(valid_statuses)}')
         return v
 
-    @validator('issue_ids')
+    @field_validator('issue_ids')
     def validate_issue_ids(cls, v):
         if not v:
             raise ValueError('At least one issue ID must be provided')
@@ -293,7 +291,7 @@ class ResolveIssuesRequest(BaseModel):
     issue_ids: List[int]
     resolution_notes: str
 
-    @validator('resolution_notes')
+    @field_validator('resolution_notes')
     def validate_resolution_notes(cls, v):
         if not v or not v.strip():
             raise ValueError('Resolution notes cannot be empty')
@@ -394,7 +392,7 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     mobile_number: Optional[str] = None
 
-    @validator('full_name')
+    @field_validator('full_name')
     def validate_full_name(cls, v):
         if v is not None:
             if not v.strip():
@@ -405,7 +403,7 @@ class UserProfileUpdate(BaseModel):
                 raise ValueError('Full name can only contain letters, spaces and underscores')
         return v.strip() if v else v
 
-    @validator('mobile_number')
+    @field_validator('mobile_number')
     def validate_mobile_number(cls, v):
         if v is not None:
             if not re.match(r'^\d{10}$', v):
@@ -440,25 +438,25 @@ class MapBoundsRequest(BaseModel):
     east: float
     west: float
 
-    @validator('north')
+    @field_validator('north')
     def validate_north(cls, v):
         if not -90 <= v <= 90:
             raise ValueError('North bound must be between -90 and 90')
         return v
 
-    @validator('south')
+    @field_validator('south')
     def validate_south(cls, v):
         if not -90 <= v <= 90:
             raise ValueError('South bound must be between -90 and 90')
         return v
 
-    @validator('east')
+    @field_validator('east')
     def validate_east(cls, v):
         if not -180 <= v <= 180:
             raise ValueError('East bound must be between -180 and 180')
         return v
 
-    @validator('west')
+    @field_validator('west')
     def validate_west(cls, v):
         if not -180 <= v <= 180:
             raise ValueError('West bound must be between -180 and 180')
