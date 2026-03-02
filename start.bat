@@ -1,44 +1,51 @@
 @echo off
-REM ================================================
-REM  UrbanSim AI — One-Command Startup (Windows)
-REM ================================================
+title UrbanSim AI - Startup
+color 0A
 
-echo.
-echo  =========================================
-echo   UrbanSim AI — Starting All Services
-echo  =========================================
+echo ========================================
+echo    UrbanSim AI - Starting Application
+echo ========================================
 echo.
 
-REM --- Check virtual environment ---
-if not exist ".venv\Scripts\activate.bat" (
-    echo [ERROR] Virtual environment not found at .venv\
-    echo         Run: python -m venv .venv
-    echo         Then: .venv\Scripts\activate ^&^& pip install -r requirements.txt
-    exit /b 1
+REM Check if this is first run
+if not exist "backend\venv" (
+    echo [SETUP] First time setup detected...
+    echo [SETUP] Creating Python virtual environment...
+    cd backend
+    python -m venv venv
+    call venv\Scripts\activate
+    echo [SETUP] Installing backend dependencies...
+    pip install -r requirements.txt
+    pip install argon2-cffi
+    cd ..
+    echo [SETUP] Setup complete!
+    echo.
 )
 
-REM --- Activate venv ---
-call .venv\Scripts\activate.bat
+if not exist "flutter_app\.dart_tool" (
+    echo [SETUP] Installing Flutter dependencies...
+    cd flutter_app
+    flutter pub get
+    cd ..
+    echo.
+)
 
-REM --- Initialize database (idempotent) ---
-echo [1/3] Initializing database...
-cd backend
-python init_db_simple.py
-cd ..
-echo       Done.
+echo [START] Starting Backend Server...
+start "UrbanSim Backend" cmd /k "cd backend && venv\Scripts\activate && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 
-REM --- Start Backend (background) ---
-echo [2/3] Starting Backend on http://localhost:8000 ...
-start "UrbanSim-Backend" cmd /k "cd backend && ..\\.venv\\Scripts\\activate.bat && uvicorn main:app --reload --port 8000"
+timeout /t 5 /nobreak >nul
 
-REM --- Start Frontend ---
-echo [3/3] Starting Frontend on http://localhost:8081 ...
-start "UrbanSim-Frontend" cmd /k "cd frontend\BUILDTHAON-2025-frontend && npx expo start --web"
+echo [START] Starting Flutter App...
+start "UrbanSim Flutter" cmd /k "cd flutter_app && flutter run -d chrome"
 
 echo.
-echo  =========================================
-echo   All services started!
-echo   Backend:  http://localhost:8000/docs
-echo   Frontend: http://localhost:8081
-echo  =========================================
+echo ========================================
+echo    Application Started Successfully!
+echo ========================================
 echo.
+echo Backend API: http://localhost:8000
+echo API Docs: http://localhost:8000/docs
+echo Flutter App: Opening in Chrome...
+echo.
+echo Press any key to exit this window...
+pause >nul

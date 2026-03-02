@@ -1,0 +1,45 @@
+name: urban_sim_ai
+description: Urban issue reporting and management app
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI & Design
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Networking
+  http: ^1.1.2
+  
+  # Storage
+  shared_preferences: ^2.2.2
+  
+  # Location
+  geolocator: ^11.0.0
+  geocoding: ^3.0.0
+  
+  # Image Handling
+  image_picker: ^1.0.7
+  
+  # Maps
+  google_maps_flutter: ^2.5.3
+  
+  # Utils
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
