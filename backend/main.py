@@ -46,8 +46,25 @@ class UserCreateEnhanced(BaseModel):
 
     @field_validator('password')
     def password_strength(cls, v):
-        if len(v) < 6:
-            raise ValueError('Password must be at least 6 characters long')
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        
+        # Check for uppercase letter
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        
+        # Check for lowercase letter
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        
+        # Check for digit
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Password must contain at least one number')
+        
+        # Check for special character
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]', v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*...)')
+        
         return v
 
     @field_validator('full_name')
@@ -378,17 +395,16 @@ async def create_report(
     db: AsyncSession = Depends(get_db)
 ):
     try:
-        # 1️⃣ Fetch "Reported" status
+        # 1️⃣ Fetch or auto-create "Reported" status so the endpoint never hard-fails
         status_result = await db.execute(
             select(Status).where(Status.name == "Reported")
         )
         reported_status = status_result.scalar_one_or_none()
 
         if not reported_status:
-            raise HTTPException(
-                status_code=500,
-                detail="Reported status not found in database"
-            )
+            reported_status = Status(name="Reported", description="Issue has been reported")
+            db.add(reported_status)
+            await db.flush()  # get the id without committing
 
         # 2️⃣ Create report
         db_report = Report(
@@ -403,11 +419,8 @@ async def create_report(
             location_lat=report_data.location_lat,
             location_long=report_data.location_long,
             location_address=report_data.location_address,
-
-            # ✅ FIXED
-            status="Reported",                 # optional (legacy)
-            status_id=reported_status.id,      # source of truth
-
+            status="Reported",
+            status_id=reported_status.id,
             department=report_data.department or "other",
             auto_assigned=report_data.auto_assigned or False,
             prediction_confidence=report_data.prediction_confidence
