@@ -1,62 +1,123 @@
 import 'package:flutter/foundation.dart';
-import '../core/database_helper.dart';
+import '../core/api_service.dart';
 import '../models/report_model.dart';
 
 class ReportProvider with ChangeNotifier {
   List<ReportModel> _reports = [];
-  Map<String, int> _stats = {};
+  Map<String, dynamic> _stats = {};
   bool _isLoading = false;
+  String? _error;
 
   List<ReportModel> get reports => _reports;
-  Map<String, int> get stats => _stats;
+  Map<String, dynamic> get stats => _stats;
   bool get isLoading => _isLoading;
+  String? get error => _error;
 
-  Future<void> loadUserReports(int userId) async {
-    _isLoading = true;
-    notifyListeners();
-    _reports = await DatabaseHelper.instance.getReportsByUser(userId);
-    _stats = await DatabaseHelper.instance.getUserStats(userId);
-    _isLoading = false;
+  void _setError(String? e) {
+    _error = e;
     notifyListeners();
   }
 
-  Future<void> loadAllReports() async {
+  Future<bool> fetchUserReports(String token) async {
     _isLoading = true;
+    _setError(null);
     notifyListeners();
-    _reports = await DatabaseHelper.instance.getAllReports();
-    _stats = await DatabaseHelper.instance.getAdminStats();
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<bool> submitReport(ReportModel report) async {
     try {
-      final id = await DatabaseHelper.instance.insertReport(report);
-      await DatabaseHelper.instance.logActivity(
-          id, report.userId, 'report_created', 'New report: ${report.title}');
-      _reports.insert(0, report.copyWith());
-      notifyListeners();
-      return true;
+      final response = await ApiService.getReports(token, all: false);
+      _isLoading = false;
+      if (response.isSuccess) {
+        final List data = response.data;
+        _reports = data.map((m) => ReportModel.fromMap(m)).toList();
+        notifyListeners();
+        return true;
+      } else {
+        _setError(response.error);
+        return false;
+      }
     } catch (e) {
+      _isLoading = false;
+      _setError("An unexpected error occurred");
       return false;
     }
   }
 
-  Future<void> updateStatus(int reportId, String status, int adminId) async {
-    await DatabaseHelper.instance.updateReportStatus(reportId, status);
-    await DatabaseHelper.instance.logActivity(
-        reportId, adminId, 'status_updated', 'Status changed to $status');
-    final idx = _reports.indexWhere((r) => r.id == reportId);
-    if (idx != -1) {
-      _reports[idx] = _reports[idx].copyWith(
-          status: status, updatedAt: DateTime.now().toIso8601String());
-      notifyListeners();
+  Future<bool> fetchAllReports(String token) async {
+    _isLoading = true;
+    _setError(null);
+    notifyListeners();
+    try {
+      final response = await ApiService.getReports(token, all: true);
+      if (response.isSuccess) {
+        final List data = response.data;
+        _reports = data.map((m) => ReportModel.fromMap(m)).toList();
+        
+        final statsResp = await ApiService.getStats(token);
+        if (statsResp.isSuccess) {
+          _stats = statsResp.data;
+        }
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _isLoading = false;
+        _setError(response.error);
+        return false;
+      }
+    } catch (e) {
+      _isLoading = false;
+      _setError("An unexpected error occurred");
+      return false;
     }
   }
 
-  Future<void> deleteReport(int reportId) async {
-    await DatabaseHelper.instance.deleteReport(reportId);
-    _reports.removeWhere((r) => r.id == reportId);
+  Future<String?> submitReport(String token, ReportModel report) async {
+    _isLoading = true;
     notifyListeners();
+    try {
+      final response = await ApiService.createReport(token, report);
+      _isLoading = false;
+      if (response.isSuccess) {
+        final newReport = ReportModel.fromMap(response.data);
+        _reports.insert(0, newReport);
+        notifyListeners();
+        return null;
+      }
+      return response.error ?? "Failed to submit report";
+    } catch (e) {
+      _isLoading = false;
+      return "Error: $e";
+    }
+  }
+
+  Future<String?> updateStatus(String token, int reportId, String status) async {
+    try {
+      final response = await ApiService.updateReportStatus(token, reportId, status);
+      if (response.isSuccess) {
+        final idx = _reports.indexWhere((r) => r.id == reportId);
+        if (idx != -1) {
+          _reports[idx] = _reports[idx].copyWith(
+              status: status, updatedAt: DateTime.now().toIso8601String());
+          notifyListeners();
+        }
+        return null;
+      }
+      return response.error ?? "Failed to update status";
+    } catch (e) {
+      return "Error: $e";
+    }
+  }
+
+  Future<String?> deleteReport(String token, int reportId) async {
+    try {
+      final response = await ApiService.deleteReport(token, reportId);
+      if (response.isSuccess) {
+        _reports.removeWhere((r) => r.id == reportId);
+        notifyListeners();
+        return null;
+      }
+      return response.error ?? "Failed to delete report";
+    } catch (e) {
+      return "Error: $e";
+    }
   }
 }

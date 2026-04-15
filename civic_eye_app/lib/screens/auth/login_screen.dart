@@ -30,13 +30,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus(); // Dismiss keyboard
     setState(() => _loading = true);
+    
     final error = await context.read<AuthProvider>().login(
-          _emailCtrl.text,
+          _emailCtrl.text.trim(),
           _passCtrl.text,
         );
+        
     if (!mounted) return;
     setState(() => _loading = false);
+    
     if (error != null) {
       _showError(error);
     } else {
@@ -56,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppTheme.accent,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(20),
     ));
   }
 
@@ -125,8 +130,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: Icons.email_outlined,
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
-                          if (v == null || v.isEmpty) return 'Enter your email';
-                          if (!v.contains('@')) return 'Invalid email';
+                          if (v == null || v.trim().isEmpty) return 'Enter your email';
+                          final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          if (!emailRegex.hasMatch(v.trim())) return 'Invalid email format';
                           return null;
                         },
                       ).animate(delay: 300.ms).slideY(begin: 0.2).fadeIn(),
@@ -147,6 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         validator: (v) {
                           if (v == null || v.isEmpty) return 'Enter your password';
+                          if (v.length < 6) return 'Password must be at least 6 characters';
                           return null;
                         },
                       ).animate(delay: 400.ms).slideY(begin: 0.2).fadeIn(),
@@ -261,6 +268,7 @@ class _GlassField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       validator: validator,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15),
       decoration: InputDecoration(
         labelText: label,

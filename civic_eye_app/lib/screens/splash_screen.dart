@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
-import '../core/database_helper.dart';
 import '../providers/auth_provider.dart';
 import 'auth/login_screen.dart';
 import 'home/home_screen.dart';
@@ -23,18 +22,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _init() async {
-    // Pre-warm the DB and wait for auth session restore in parallel
-    await Future.wait([
-      DatabaseHelper.instance.database, // initializes DB + seeds admin
-      Future.delayed(const Duration(milliseconds: 1500)), // min splash time
-    ]);
+    // Wait for a minimum time to show splash
+    await Future.delayed(const Duration(milliseconds: 1500));
 
     if (!mounted) return;
 
     // Now wait for auth provider to finish restoring session
     final auth = context.read<AuthProvider>();
     while (auth.isLoading) {
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 100));
     }
 
     if (!mounted) return;

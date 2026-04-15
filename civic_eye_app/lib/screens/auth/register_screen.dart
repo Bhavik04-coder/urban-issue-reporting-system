@@ -45,25 +45,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
     setState(() => _loading = true);
+    
     final error = await context.read<AuthProvider>().register(
-          email: _emailCtrl.text,
+          email: _emailCtrl.text.trim(),
           password: _passCtrl.text,
-          fullName: _nameCtrl.text,
-          mobile: _mobileCtrl.text,
+          fullName: _nameCtrl.text.trim(),
+          mobile: _mobileCtrl.text.trim(),
         );
+        
     if (!mounted) return;
     setState(() => _loading = false);
+    
     if (error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error),
         backgroundColor: AppTheme.accent,
         behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(20),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ));
     } else {
-      Navigator.pushAndRemoveUntil(context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()), (_) => false);
+      // Auto login after registration or redirect to login
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Registration successful! Please login.'),
+        backgroundColor: AppTheme.statusResolved,
+      ));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
     }
   }
 
@@ -141,9 +150,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         icon: Icons.email_outlined,
                         keyboardType: TextInputType.emailAddress,
                         validator: (v) {
-                          if (v == null || !v.contains('@')) {
-                            return 'Enter a valid email';
-                          }
+                          if (v == null || v.trim().isEmpty) return 'Enter your email';
+                          final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                          if (!emailRegex.hasMatch(v.trim())) return 'Invalid email format';
                           return null;
                         },
                       ).animate(delay: 250.ms).slideY(begin: 0.2).fadeIn(),
@@ -154,8 +163,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         icon: Icons.phone_outlined,
                         keyboardType: TextInputType.phone,
                         validator: (v) {
-                          if (v == null || !RegExp(r'^\d{10}$').hasMatch(v)) {
-                            return 'Enter a valid 10-digit number';
+                          if (v == null || !RegExp(r'^\d{10}$').hasMatch(v.trim())) {
+                            return 'Enter exactly 10 digits';
                           }
                           return null;
                         },
@@ -309,6 +318,7 @@ class _Field extends StatelessWidget {
       keyboardType: keyboardType,
       onChanged: onChanged,
       validator: validator,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15),
       decoration: InputDecoration(
         labelText: label,

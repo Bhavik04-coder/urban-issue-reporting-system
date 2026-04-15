@@ -25,8 +25,8 @@ class _DashboardTabState extends State<DashboardTab> {
 
   void _load() {
     final auth = context.read<AuthProvider>();
-    if (auth.user != null) {
-      context.read<ReportProvider>().loadUserReports(auth.user!.id!);
+    if (auth.token != null) {
+      context.read<ReportProvider>().fetchUserReports(auth.token!);
     }
   }
 
@@ -37,6 +37,12 @@ class _DashboardTabState extends State<DashboardTab> {
     final name = auth.user?.fullName.split(' ').first ?? 'User';
     final hour = DateTime.now().hour;
     final greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+    // Calculate user-specific stats from the fetched reports list
+    final userReports = rp.reports;
+    final total = userReports.length;
+    final resolved = userReports.where((r) => r.status == 'Resolved').length;
+    final pending = userReports.where((r) => r.status == 'Pending').length;
 
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
@@ -137,21 +143,21 @@ class _DashboardTabState extends State<DashboardTab> {
                   children: [
                     _StatCard(
                       label: 'Total',
-                      value: '${rp.stats['total'] ?? 0}',
+                      value: '$total',
                       icon: Icons.assignment_outlined,
                       color: AppTheme.primary,
                     ),
                     const SizedBox(width: 12),
                     _StatCard(
                       label: 'Resolved',
-                      value: '${rp.stats['resolved'] ?? 0}',
+                      value: '$resolved',
                       icon: Icons.check_circle_outline,
                       color: AppTheme.statusResolved,
                     ),
                     const SizedBox(width: 12),
                     _StatCard(
                       label: 'Pending',
-                      value: '${rp.stats['pending'] ?? 0}',
+                      value: '$pending',
                       icon: Icons.schedule_outlined,
                       color: AppTheme.statusPending,
                     ),
@@ -229,7 +235,13 @@ class _DashboardTabState extends State<DashboardTab> {
                             fontSize: 18,
                             fontWeight: FontWeight.w700)),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const MyReportsScreen()));
+                      },
                       child: const Text('See all',
                           style: TextStyle(
                               color: AppTheme.primary, fontSize: 13)),

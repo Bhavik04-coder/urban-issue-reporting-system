@@ -16,26 +16,18 @@ class MyReportsScreen extends StatefulWidget {
 
 class _MyReportsScreenState extends State<MyReportsScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabs;
   String _filter = 'All';
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
-  }
-
-  @override
-  void dispose() {
-    _tabs.dispose();
-    super.dispose();
   }
 
   void _load() {
     final auth = context.read<AuthProvider>();
-    if (auth.user != null) {
-      context.read<ReportProvider>().loadUserReports(auth.user!.id!);
+    if (auth.token != null) {
+      context.read<ReportProvider>().fetchUserReports(auth.token!);
     }
   }
 
@@ -57,25 +49,9 @@ class _MyReportsScreenState extends State<MyReportsScreen>
             automaticallyImplyLeading: false,
             title: const Text('My Reports'),
             bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(100),
+              preferredSize: const Size.fromHeight(60),
               child: Column(
                 children: [
-                  // Stats row
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Row(
-                      children: [
-                        _MiniStat('Total', '${rp.stats['total'] ?? 0}',
-                            AppTheme.primary),
-                        const SizedBox(width: 8),
-                        _MiniStat('Resolved', '${rp.stats['resolved'] ?? 0}',
-                            AppTheme.statusResolved),
-                        const SizedBox(width: 8),
-                        _MiniStat('Pending', '${rp.stats['pending'] ?? 0}',
-                            AppTheme.statusPending),
-                      ],
-                    ),
-                  ),
                   // Filter chips
                   SizedBox(
                     height: 40,
@@ -117,7 +93,7 @@ class _MyReportsScreenState extends State<MyReportsScreen>
                       }).toList(),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
@@ -126,48 +102,20 @@ class _MyReportsScreenState extends State<MyReportsScreen>
         body: rp.isLoading
             ? const Center(
                 child: CircularProgressIndicator(color: AppTheme.primary))
-            : filtered.isEmpty
-                ? _EmptyState(filter: _filter)
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ReportTile(report: filtered[i]),
-                    ).animate(delay: (i * 60).ms).slideX(begin: 0.1).fadeIn(),
-                  ),
-      ),
-    );
-  }
-}
-
-class _MiniStat extends StatelessWidget {
-  final String label, value;
-  final Color color;
-  const _MiniStat(this.label, this.value, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: color.withAlpha(20),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withAlpha(40)),
-        ),
-        child: Column(
-          children: [
-            Text(value,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800)),
-            Text(label,
-                style: const TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 11)),
-          ],
-        ),
+            : RefreshIndicator(
+                onRefresh: () async => _load(),
+                color: AppTheme.primary,
+                child: filtered.isEmpty
+                    ? _EmptyState(filter: _filter)
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                        itemCount: filtered.length,
+                        itemBuilder: (_, i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ReportTile(report: filtered[i]),
+                        ).animate(delay: (i * 60).ms).slideX(begin: 0.1).fadeIn(),
+                      ),
+              ),
       ),
     );
   }
@@ -249,7 +197,7 @@ class _ReportTile extends StatelessWidget {
                           ? AppTheme.warning
                           : AppTheme.secondary),
               const Spacer(),
-              Icon(Icons.calendar_today_outlined,
+              const Icon(Icons.calendar_today_outlined,
                   size: 12, color: AppTheme.textSecondary),
               const SizedBox(width: 4),
               Text(dateStr,
@@ -307,37 +255,42 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppTheme.surfaceCard,
-              borderRadius: BorderRadius.circular(24),
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.6,
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceCard,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: const Icon(Icons.inbox_outlined,
+                  color: AppTheme.textSecondary, size: 36),
             ),
-            child: const Icon(Icons.inbox_outlined,
-                color: AppTheme.textSecondary, size: 36),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            filter == 'All' ? 'No reports yet' : 'No $filter reports',
-            style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            filter == 'All'
-                ? 'Submit your first civic issue report'
-                : 'No reports with this status',
-            style: const TextStyle(
-                color: AppTheme.textSecondary, fontSize: 13),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              filter == 'All' ? 'No reports yet' : 'No $filter reports',
+              style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              filter == 'All'
+                  ? 'Submit your first civic issue report'
+                  : 'No reports with this status',
+              style: const TextStyle(
+                  color: AppTheme.textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
       ),
     );
   }

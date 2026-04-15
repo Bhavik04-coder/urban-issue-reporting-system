@@ -18,9 +18,14 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReportProvider>().loadAllReports();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  void _load() {
+    final auth = context.read<AuthProvider>();
+    if (auth.token != null) {
+      context.read<ReportProvider>().fetchAllReports(auth.token!);
+    }
   }
 
   @override
@@ -33,7 +38,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
       body: RefreshIndicator(
-        onRefresh: () => context.read<ReportProvider>().loadAllReports(),
+        onRefresh: () async => _load(),
         color: AppTheme.primary,
         backgroundColor: AppTheme.surfaceCard,
         child: CustomScrollView(
@@ -112,7 +117,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                       children: [
                         _BigStatCard(
                           label: 'Total Reports',
-                          value: '${stats['total'] ?? 0}',
+                          value: '${stats['total_reports'] ?? 0}',
                           icon: Icons.assignment_rounded,
                           color: AppTheme.primary,
                           subtitle: 'All time',
@@ -120,7 +125,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                         const SizedBox(width: 12),
                         _BigStatCard(
                           label: 'Resolved',
-                          value: '${stats['resolved'] ?? 0}',
+                          value: '${stats['resolved_reports'] ?? 0}',
                           icon: Icons.check_circle_rounded,
                           color: AppTheme.statusResolved,
                           subtitle: 'Completed',
@@ -132,7 +137,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                       children: [
                         _BigStatCard(
                           label: 'Pending',
-                          value: '${stats['pending'] ?? 0}',
+                          value: '${stats['pending_reports'] ?? 0}',
                           icon: Icons.schedule_rounded,
                           color: AppTheme.statusPending,
                           subtitle: 'Awaiting',
@@ -140,7 +145,7 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                         const SizedBox(width: 12),
                         _BigStatCard(
                           label: 'In Progress',
-                          value: '${stats['inProgress'] ?? 0}',
+                          value: '${stats['in_progress_reports'] ?? 0}',
                           icon: Icons.pending_rounded,
                           color: AppTheme.statusInProgress,
                           subtitle: 'Active',
@@ -272,6 +277,7 @@ class _BigStatCard extends StatelessWidget {
                     color: AppTheme.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
             Text(subtitle,
                 style: const TextStyle(
                     color: AppTheme.textSecondary, fontSize: 11)),
@@ -283,14 +289,14 @@ class _BigStatCard extends StatelessWidget {
 }
 
 class _ResolutionCard extends StatelessWidget {
-  final Map<String, int> stats;
+  final Map<String, dynamic> stats;
   const _ResolutionCard({required this.stats});
 
   @override
   Widget build(BuildContext context) {
-    final total = stats['total'] ?? 0;
-    final resolved = stats['resolved'] ?? 0;
-    final rate = total > 0 ? resolved / total : 0.0;
+    final total = stats['total_reports'] ?? 0;
+    final resolved = stats['resolved_reports'] ?? 0;
+    final rate = total > 0 ? (resolved / total) : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(20),

@@ -72,9 +72,20 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() => _submitting = true);
 
     final auth = context.read<AuthProvider>();
+    final reportProvider = context.read<ReportProvider>();
+    
+    if (auth.token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('You must be logged in to submit a report.'),
+        backgroundColor: AppTheme.accent,
+      ));
+      setState(() => _submitting = false);
+      return;
+    }
+
     final now = DateTime.now().toIso8601String();
     final report = ReportModel(
-      userId: auth.user!.id!,
+      userId: auth.user?.id ?? 0,
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim(),
       category: _category,
@@ -87,7 +98,7 @@ class _ReportScreenState extends State<ReportScreen> {
       updatedAt: now,
     );
 
-    final ok = await context.read<ReportProvider>().submitReport(report);
+    final ok = await reportProvider.submitReport(auth.token!, report);
     if (!mounted) return;
     setState(() => _submitting = false);
 

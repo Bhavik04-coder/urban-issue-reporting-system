@@ -21,9 +21,14 @@ class _AdminReportsTabState extends State<AdminReportsTab> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReportProvider>().loadAllReports();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  void _load() {
+    final auth = context.read<AuthProvider>();
+    if (auth.token != null) {
+      context.read<ReportProvider>().fetchAllReports(auth.token!);
+    }
   }
 
   @override
@@ -131,18 +136,22 @@ class _AdminReportsTabState extends State<AdminReportsTab> {
         body: rp.isLoading
             ? const Center(
                 child: CircularProgressIndicator(color: AppTheme.primary))
-            : reports.isEmpty
-                ? const Center(
-                    child: Text('No reports found',
-                        style: TextStyle(color: AppTheme.textSecondary)))
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-                    itemCount: reports.length,
-                    itemBuilder: (_, i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _AdminReportCard(report: reports[i]),
-                    ).animate(delay: (i * 40).ms).slideX(begin: 0.1).fadeIn(),
-                  ),
+            : RefreshIndicator(
+                onRefresh: () async => _load(),
+                color: AppTheme.primary,
+                child: reports.isEmpty
+                    ? const Center(
+                        child: Text('No reports found',
+                            style: TextStyle(color: AppTheme.textSecondary)))
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                        itemCount: reports.length,
+                        itemBuilder: (_, i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _AdminReportCard(report: reports[i]),
+                        ).animate(delay: (i * 40).ms).slideX(begin: 0.1).fadeIn(),
+                      ),
+              ),
       ),
     );
   }
@@ -287,16 +296,6 @@ class _AdminReportCard extends StatelessWidget {
                   color: AppTheme.statusRejected,
                   onTap: () => _updateStatus(context, 'Rejected'),
                 ),
-                Container(
-                    width: 1,
-                    height: 36,
-                    color: Colors.white.withAlpha(10)),
-                _ActionBtn(
-                  label: 'Delete',
-                  color: AppTheme.accent,
-                  icon: Icons.delete_outline,
-                  onTap: () => _confirmDelete(context),
-                ),
               ],
             ),
           ),
@@ -307,51 +306,21 @@ class _AdminReportCard extends StatelessWidget {
 
   void _updateStatus(BuildContext context, String status) async {
     final auth = context.read<AuthProvider>();
-    await context
+    if (auth.token == null) return;
+
+    final ok = await context
         .read<ReportProvider>()
-        .updateStatus(report.id!, status, auth.user!.id!);
+        .updateStatus(auth.token!, report.id!, status);
+    
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Status updated to $status'),
-        backgroundColor: AppTheme.statusResolved,
+        content: Text(ok ? 'Status updated to $status' : 'Failed to update status'),
+        backgroundColor: ok ? AppTheme.statusResolved : AppTheme.accent,
         behavior: SnackBarBehavior.floating,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ));
     }
-  }
-
-  void _confirmDelete(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surfaceCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Report',
-            style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text('This action cannot be undone.',
-            style: TextStyle(color: AppTheme.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppTheme.textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accent),
-            onPressed: () async {
-              Navigator.pop(context);
-              await context
-                  .read<ReportProvider>()
-                  .deleteReport(report.id!);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
   }
 }
 
