@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
+import '../../core/api_service.dart';
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
+import '../admin/super_admin_users_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -11,7 +14,17 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
     final user = auth.user;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppTheme.bgDark : AppTheme.bgLight;
+    final textPrimary =
+        isDark ? AppTheme.textPrimary : AppTheme.textPrimaryLight;
+    final textSecondary =
+        isDark ? AppTheme.textSecondary : AppTheme.textSecondaryLight;
+    final cardColor =
+        isDark ? AppTheme.surfaceCard : AppTheme.surfaceCardLight;
+
     final initials = user?.fullName
             .split(' ')
             .take(2)
@@ -20,14 +33,14 @@ class ProfileScreen extends StatelessWidget {
         'U';
 
     return Scaffold(
-      backgroundColor: AppTheme.bgDark,
+      backgroundColor: bg,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            backgroundColor: AppTheme.bgDark,
+            backgroundColor: bg,
             automaticallyImplyLeading: false,
-            title: const Text('Profile'),
+            title: Text('Profile', style: TextStyle(color: textPrimary)),
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -62,16 +75,16 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
                   Text(user?.fullName ?? 'User',
-                      style: const TextStyle(
-                          color: AppTheme.textPrimary,
+                      style: TextStyle(
+                          color: textPrimary,
                           fontSize: 22,
                           fontWeight: FontWeight.w700))
                       .animate(delay: 100.ms)
                       .fadeIn(),
                   const SizedBox(height: 4),
                   Text(user?.email ?? '',
-                      style: const TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 14))
+                      style: TextStyle(
+                          color: textSecondary, fontSize: 14))
                       .animate(delay: 150.ms)
                       .fadeIn(),
                   const SizedBox(height: 8),
@@ -119,25 +132,34 @@ class ProfileScreen extends StatelessWidget {
                   const SizedBox(height: 32),
 
                   // Info card
-                  _InfoCard(user: user)
-                      .animate(delay: 300.ms)
-                      .slideY(begin: 0.2)
-                      .fadeIn(),
+                  _InfoCard(
+                    user: user,
+                    cardColor: cardColor,
+                    textPrimary: textPrimary,
+                    textSecondary: textSecondary,
+                  ).animate(delay: 300.ms).slideY(begin: 0.2).fadeIn(),
 
                   const SizedBox(height: 20),
 
-                  // Menu
+                  // Account section
                   _MenuSection(
                     title: 'Account',
+                    cardColor: cardColor,
+                    textPrimary: textPrimary,
+                    textSecondary: textSecondary,
                     items: [
                       _MenuItem(
                         icon: Icons.edit_outlined,
                         label: 'Edit Profile',
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
                         onTap: () => _showEditDialog(context, auth),
                       ),
                       _MenuItem(
                         icon: Icons.lock_outline,
                         label: 'Change Password',
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
                         onTap: () {},
                       ),
                     ],
@@ -145,27 +167,102 @@ class ProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 16),
 
+                  // App section
                   _MenuSection(
                     title: 'App',
+                    cardColor: cardColor,
+                    textPrimary: textPrimary,
+                    textSecondary: textSecondary,
                     items: [
+                      // Feature 13: Theme toggle
+                      _MenuItemSwitch(
+                        icon: themeProvider.isDark
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        label: themeProvider.isDark
+                            ? 'Dark Mode'
+                            : 'Light Mode',
+                        value: themeProvider.isDark,
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                        onChanged: (_) => themeProvider.toggle(),
+                      ),
                       _MenuItem(
                         icon: Icons.notifications_outlined,
                         label: 'Notifications',
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
                         onTap: () {},
                       ),
                       _MenuItem(
                         icon: Icons.help_outline,
                         label: 'Help & Support',
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
                         onTap: () {},
                       ),
                       _MenuItem(
                         icon: Icons.info_outline,
                         label: 'About CivicEye',
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
                         onTap: () => _showAbout(context),
                       ),
                     ],
                   ).animate(delay: 400.ms).slideY(begin: 0.2).fadeIn(),
 
+                  // Super Admin: User management
+                  if (auth.isSuperAdmin) ...[
+                    const SizedBox(height: 16),
+                    _MenuSection(
+                      title: 'Administration',
+                      cardColor: cardColor,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      items: [
+                        _MenuItem(
+                          icon: Icons.manage_accounts_rounded,
+                          label: 'Manage Users & Admins',
+                          textPrimary: textPrimary,
+                          textSecondary: textSecondary,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const SuperAdminUsersScreen(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ).animate(delay: 415.ms).slideY(begin: 0.2).fadeIn(),
+                  ],
+
+                  // Feature 12: Export section (admin only)
+                  if (auth.isAdmin) ...[
+                    const SizedBox(height: 16),
+                    _MenuSection(
+                      title: 'Export',
+                      cardColor: cardColor,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      items: [
+                        _MenuItem(
+                          icon: Icons.table_chart_outlined,
+                          label: 'Export Reports as CSV',
+                          textPrimary: textPrimary,
+                          textSecondary: textSecondary,
+                          onTap: () => _exportCsv(context, auth),
+                        ),
+                        _MenuItem(
+                          icon: Icons.picture_as_pdf_outlined,
+                          label: 'Export Reports as PDF',
+                          textPrimary: textPrimary,
+                          textSecondary: textSecondary,
+                          onTap: () => _exportPdf(context, auth),
+                        ),
+                      ],
+                    ).animate(delay: 420.ms).slideY(begin: 0.2).fadeIn(),
+                  ],
                   const SizedBox(height: 16),
 
                   // Logout
@@ -305,26 +402,102 @@ class ProfileScreen extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _exportCsv(BuildContext context, AuthProvider auth) async {
+    if (auth.token == null) return;
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Preparing CSV export…'),
+          backgroundColor: AppTheme.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await ApiService.exportCsv(auth.token!);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('CSV export ready — check your downloads'),
+            backgroundColor: AppTheme.secondary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: AppTheme.accent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _exportPdf(BuildContext context, AuthProvider auth) async {
+    if (auth.token == null) return;
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Preparing PDF export…'),
+          backgroundColor: AppTheme.primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      await ApiService.exportPdf(auth.token!);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('PDF export ready — check your downloads'),
+            backgroundColor: AppTheme.secondary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: AppTheme.accent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
 }
+
+// ── Shared widgets ─────────────────────────────────────────────────────────────
 
 class _InfoCard extends StatelessWidget {
   final dynamic user;
-  const _InfoCard({required this.user});
+  final Color cardColor, textPrimary, textSecondary;
+  const _InfoCard({
+    required this.user,
+    required this.cardColor,
+    required this.textPrimary,
+    required this.textSecondary,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceCard,
+        color: cardColor,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: Colors.white.withAlpha(10)),
       ),
       child: Column(
         children: [
-          _InfoRow(Icons.email_outlined, 'Email', user?.email ?? '-'),
-          const Divider(color: Color(0xFF2A2A4A), height: 24),
-          _InfoRow(Icons.phone_outlined, 'Mobile', user?.mobile ?? '-'),
+          _InfoRow(Icons.email_outlined, 'Email', user?.email ?? '-',
+              textPrimary, textSecondary),
+          Divider(color: textSecondary.withAlpha(30), height: 24),
+          _InfoRow(Icons.phone_outlined, 'Mobile', user?.mobile ?? '-',
+              textPrimary, textSecondary),
         ],
       ),
     );
@@ -334,7 +507,9 @@ class _InfoCard extends StatelessWidget {
 class _InfoRow extends StatelessWidget {
   final IconData icon;
   final String label, value;
-  const _InfoRow(this.icon, this.label, this.value);
+  final Color textPrimary, textSecondary;
+  const _InfoRow(
+      this.icon, this.label, this.value, this.textPrimary, this.textSecondary);
 
   @override
   Widget build(BuildContext context) {
@@ -346,11 +521,10 @@ class _InfoRow extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label,
-                style: const TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 11)),
+                style: TextStyle(color: textSecondary, fontSize: 11)),
             Text(value,
-                style: const TextStyle(
-                    color: AppTheme.textPrimary,
+                style: TextStyle(
+                    color: textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.w600)),
           ],
@@ -362,8 +536,15 @@ class _InfoRow extends StatelessWidget {
 
 class _MenuSection extends StatelessWidget {
   final String title;
-  final List<_MenuItem> items;
-  const _MenuSection({required this.title, required this.items});
+  final List<Widget> items;
+  final Color cardColor, textPrimary, textSecondary;
+  const _MenuSection({
+    required this.title,
+    required this.items,
+    required this.cardColor,
+    required this.textPrimary,
+    required this.textSecondary,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -373,15 +554,15 @@ class _MenuSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 10),
           child: Text(title,
-              style: const TextStyle(
-                  color: AppTheme.textSecondary,
+              style: TextStyle(
+                  color: textSecondary,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.8)),
         ),
         Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceCard,
+            color: cardColor,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: Colors.white.withAlpha(10)),
           ),
@@ -392,8 +573,8 @@ class _MenuSection extends StatelessWidget {
                 children: [
                   e.value,
                   if (!isLast)
-                    const Divider(
-                        color: Color(0xFF2A2A4A),
+                    Divider(
+                        color: textSecondary.withAlpha(20),
                         height: 1,
                         indent: 52),
                 ],
@@ -410,8 +591,14 @@ class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  const _MenuItem(
-      {required this.icon, required this.label, required this.onTap});
+  final Color textPrimary, textSecondary;
+  const _MenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.textPrimary,
+    required this.textSecondary,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -419,12 +606,48 @@ class _MenuItem extends StatelessWidget {
       onTap: onTap,
       leading: Icon(icon, color: AppTheme.primary, size: 20),
       title: Text(label,
-          style: const TextStyle(
-              color: AppTheme.textPrimary,
+          style: TextStyle(
+              color: textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w500)),
-      trailing: const Icon(Icons.chevron_right,
-          color: AppTheme.textSecondary, size: 18),
+      trailing: Icon(Icons.chevron_right,
+          color: textSecondary, size: 18),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
+    );
+  }
+}
+
+// Feature 13: Theme toggle switch menu item
+class _MenuItemSwitch extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final Color textPrimary, textSecondary;
+  const _MenuItemSwitch({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    required this.textPrimary,
+    required this.textSecondary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: AppTheme.primary, size: 20),
+      title: Text(label,
+          style: TextStyle(
+              color: textPrimary,
+              fontSize: 14,
+              fontWeight: FontWeight.w500)),
+      trailing: Switch.adaptive(
+        value: value,
+        onChanged: onChanged,
+        activeColor: AppTheme.primary,
+      ),
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
     );

@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../home/home_screen.dart';
 import '../admin/admin_shell.dart';
 import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -164,8 +165,27 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ).animate(delay: 500.ms).slideY(begin: 0.3).fadeIn(),
 
+                // Feature 4: Forgot password link
+                const SizedBox(height: 12),
+                Center(
+                  child: TextButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const ForgotPasswordScreen()),
+                    ),
+                    child: const Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                          color: AppTheme.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ).animate(delay: 520.ms).fadeIn(),
+
                 const SizedBox(height: 24),
-                // Admin hint
+                // Info hint
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -185,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: TextStyle(
                                 fontSize: 12, color: AppTheme.textSecondary),
                             children: [
-                              TextSpan(text: 'Admin: '),
+                              TextSpan(text: 'Super Admin: '),
                               TextSpan(
                                   text: 'admin@example.com',
                                   style: TextStyle(

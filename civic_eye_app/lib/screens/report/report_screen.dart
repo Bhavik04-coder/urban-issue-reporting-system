@@ -5,6 +5,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '../../core/api_service.dart';
+import '../../core/draft_service.dart';
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/report_provider.dart';
@@ -57,17 +59,98 @@ class _ReportScreenState extends State<ReportScreen> {
   };
 
   @override
+  void initState() {
+    super.initState();
+    _loadDraftIfAny();
+  }
+
+  @override
   void dispose() {
+    _saveDraftSync();
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _locationCtrl.dispose();
     super.dispose();
   }
 
+  // Feature 10: Draft saving
+  Future<void> _loadDraftIfAny() async {
+    final draft = await DraftService.loadDraft();
+    if (draft != null && mounted) {
+      final savedAt = draft['saved_at'] as String?;
+      if (savedAt != null) {
+        final age = DateTime.now().difference(DateTime.parse(savedAt));
+        if (age.inDays < 7) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _showDraftRestorePrompt(draft);
+          });
+        }
+      }
+    }
+  }
+
+  void _saveDraftSync() {
+    if (_titleCtrl.text.isEmpty && _descCtrl.text.isEmpty) return;
+    DraftService.saveDraft(
+      title: _titleCtrl.text,
+      description: _descCtrl.text,
+      category: _category,
+      urgency: _urgency,
+      location: _locationCtrl.text,
+      lat: _locationLat,
+      lng: _locationLong,
+    );
+  }
+
+  void _showDraftRestorePrompt(Map<String, dynamic> draft) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: AppTheme.surfaceCard,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Restore Draft?',
+            style: TextStyle(color: AppTheme.textPrimary)),
+        content: const Text(
+          'You have an unsaved report draft. Would you like to restore it?',
+          style: TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              DraftService.clearDraft();
+              Navigator.pop(context);
+            },
+            child: const Text('Discard',
+                style: TextStyle(color: AppTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                _titleCtrl.text = draft['title'] as String? ?? '';
+                _descCtrl.text = draft['description'] as String? ?? '';
+                _locationCtrl.text = draft['location'] as String? ?? '';
+                _category =
+                    draft['category'] as String? ?? 'Road Maintenance';
+                _urgency = draft['urgency'] as String? ?? 'Medium';
+                _locationLat =
+                    (draft['lat'] as num?)?.toDouble() ?? 0.0;
+                _locationLong =
+                    (draft['lng'] as num?)?.toDouble() ?? 0.0;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final file =
-        await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final file = await picker.pickImage(
+        source: ImageSource.gallery, imageQuality: 80);
     if (file != null) setState(() => _image = file);
   }
 
@@ -115,7 +198,7 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() => _submitting = true);
 
     final auth = context.read<AuthProvider>();
-    final error = await context.read<ReportProvider>().submitReport(
+    final result = await context.read<ReportProvider>().submitReport(
           token: auth.token!,
           userName: auth.user!.fullName,
           userMobile: auth.user!.mobile,
@@ -131,13 +214,32 @@ class _ReportScreenState extends State<ReportScreen> {
           locationLong: _locationLong,
         );
     if (!mounted) return;
-    setState(() => _submitting = false);
 
-    if (error == null) {
+    if (result == null) {
+      // Feature 2: Upload image if one was selected
+      if (_image != null) {
+        try {
+          final reportId = context.read<ReportProvider>().lastSubmittedId;
+          if (reportId != null && !kIsWeb) {
+            await ApiService.uploadReportImage(
+              auth.token!,
+              reportId,
+              File(_image!.path),
+            );
+          }
+        } catch (_) {
+          // Image upload failure is non-fatal
+        }
+      }
+      // Feature 10: Clear draft on successful submission
+      await DraftService.clearDraft();
+      if (!mounted) return;
+      setState(() => _submitting = false);
       _showSuccess();
       _reset();
     } else {
-      _showSnack(error, isError: true);
+      setState(() => _submitting = false);
+      _showSnack(result, isError: true);
     }
   }
 
@@ -169,7 +271,8 @@ class _ReportScreenState extends State<ReportScreen> {
       context: context,
       builder: (_) => Dialog(
         backgroundColor: AppTheme.surfaceCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(
@@ -195,7 +298,8 @@ class _ReportScreenState extends State<ReportScreen> {
               const Text(
                 'Your issue has been recorded and will be reviewed by the concerned department.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                style: TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 13),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -240,12 +344,14 @@ class _ReportScreenState extends State<ReportScreen> {
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: _categories.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 8),
                         itemBuilder: (_, i) {
                           final cat = _categories[i];
                           final selected = cat == _category;
                           return GestureDetector(
-                            onTap: () => setState(() => _category = cat),
+                            onTap: () =>
+                                setState(() => _category = cat),
                             child: AnimatedContainer(
                               duration: 200.ms,
                               padding: const EdgeInsets.symmetric(
@@ -431,8 +537,8 @@ class _ReportScreenState extends State<ReportScreen> {
                               duration: 200.ms,
                               margin: EdgeInsets.only(
                                   right: u != 'High' ? 10 : 0),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14),
                               decoration: BoxDecoration(
                                 color: selected
                                     ? color.withAlpha(40)
@@ -511,17 +617,18 @@ class _ReportScreenState extends State<ReportScreen> {
                                       top: 8,
                                       right: 8,
                                       child: GestureDetector(
-                                        onTap: () =>
-                                            setState(() => _image = null),
+                                        onTap: () => setState(
+                                            () => _image = null),
                                         child: Container(
                                           padding: const EdgeInsets.all(6),
                                           decoration: BoxDecoration(
-                                            color:
-                                                Colors.black.withAlpha(150),
+                                            color: Colors.black
+                                                .withAlpha(150),
                                             shape: BoxShape.circle,
                                           ),
                                           child: const Icon(Icons.close,
-                                              color: Colors.white, size: 16),
+                                              color: Colors.white,
+                                              size: 16),
                                         ),
                                       ),
                                     ),
@@ -529,10 +636,13 @@ class _ReportScreenState extends State<ReportScreen> {
                                 ),
                               )
                             : const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.add_photo_alternate_outlined,
-                                      color: AppTheme.textSecondary, size: 32),
+                                  Icon(
+                                      Icons.add_photo_alternate_outlined,
+                                      color: AppTheme.textSecondary,
+                                      size: 32),
                                   SizedBox(height: 8),
                                   Text('Tap to add photo',
                                       style: TextStyle(
@@ -554,7 +664,10 @@ class _ReportScreenState extends State<ReportScreen> {
                           height: 56,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [AppTheme.primary, AppTheme.primaryDark],
+                              colors: [
+                                AppTheme.primary,
+                                AppTheme.primaryDark
+                              ],
                             ),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
@@ -583,7 +696,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                           style: TextStyle(
                                               color: Colors.white,
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w700)),
+                                              fontWeight:
+                                                  FontWeight.w700)),
                                     ],
                                   ),
                           ),

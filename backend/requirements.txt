@@ -11,7 +11,7 @@ alembic>=1.13.0
 
 # Config & auth
 python-dotenv>=1.0.0
-passlib[bcrypt]>=1.7.4
+passlib[argon2]>=1.7.4
 python-jose[cryptography]>=3.3.0
 python-multipart>=0.0.9
 email-validator>=2.1.0
@@ -24,7 +24,6 @@ scipy>=1.12.0
 python-dateutil>=2.9.0
 Pillow>=10.2.0
 
-
 # TensorFlow (CPU)
 tensorflow>=2.16.1
 
@@ -33,3 +32,8 @@ pydantic>=2.6.1
 pydantic-settings>=2.2.1
 starlette>=0.36.0
 
+# Feature 12: PDF export (optional — install manually if needed)
+reportlab>=4.1.0
+
+# Feature 4: Email (optional — configure SMTP in .env)
+# fastapi-mail>=1.4.1

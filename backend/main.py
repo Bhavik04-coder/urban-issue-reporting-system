@@ -28,7 +28,7 @@ from predict_text import predict_department_from_text
 
 from app import models
 from app.database import get_db, engine, AsyncSessionLocal
-from app.models import Report, User, Category, Status
+from app.models import Report, User, Category, Status, Confirmation
 from app.schemas import UserCreate, UserResponse, UserLogin,MapStatsResponse,MapIssuesResponse,MapIssueResponse  
 from app.auth_utils import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM    
 
@@ -190,6 +190,8 @@ MOCK_USERS = {
         "full_name": "Mock Admin",
         "mobile_number": "0000000000",
         "is_admin": True,
+        "role": "super_admin",
+        "department": None,
         "password": "admin123",
         "created_at": datetime.utcnow()
     },
@@ -199,6 +201,8 @@ MOCK_USERS = {
         "full_name": "Mock User",
         "mobile_number": "1111111111",
         "is_admin": False,
+        "role": "user",
+        "department": None,
         "password": "user123",
         "created_at": datetime.utcnow()
     }
@@ -213,7 +217,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
-        is_admin: bool = payload.get("is_admin")
         if email is None:
             raise credentials_exception
     except JWTError:
@@ -222,11 +225,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     # Check mock users first
     if email in MOCK_USERS:
         mock_data = MOCK_USERS[email]
-        # Create a mock objects that mimics the User model
         class MockUser:
             def __init__(self, data):
                 for k, v in data.items():
                     setattr(self, k, v)
+                # Ensure role/department exist on mock users
+                if not hasattr(self, 'role'):
+                    self.role = "super_admin" if data.get("is_admin") else "user"
+                if not hasattr(self, 'department'):
+                    self.department = None
         return MockUser(mock_data)
 
     result = await db.execute(select(User).filter(User.email == email))
@@ -235,12 +242,26 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         raise credentials_exception
     return user
 
-# Add this function to check if user is admin
 async def get_current_admin(current_user: User = Depends(get_current_user)):
-    if not current_user.is_admin:
+    """Allows both dept_admin and super_admin."""
+    role = getattr(current_user, "role", None)
+    is_admin = getattr(current_user, "is_admin", False)
+    if role not in ("dept_admin", "super_admin") and not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to perform this action"
+        )
+    return current_user
+
+async def get_current_super_admin(current_user: User = Depends(get_current_user)):
+    """Only super_admin can call this."""
+    role = getattr(current_user, "role", None)
+    # Also allow legacy is_admin users that are in HARDCODED_ADMIN_EMAILS
+    email = getattr(current_user, "email", "")
+    if role != "super_admin" and email not in HARDCODED_ADMIN_EMAILS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin access required"
         )
     return current_user
 
@@ -358,7 +379,9 @@ async def initialize_admin_users(db: AsyncSession = Depends(get_db)):
                     hashed_password=get_password_hash("admin123"),  
                     full_name=f"Admin User {i+1}",
                     mobile_number=f"98765432{i:02d}",
-                    is_admin=True
+                    is_admin=True,
+                    role="super_admin",
+                    department=None,
                 )
                 db.add(admin_user)
                 admins_created.append(email)
@@ -586,13 +609,15 @@ async def signup(user_data: UserCreateEnhanced, db: AsyncSession = Depends(get_d
     # Hash password
     hashed_password = get_password_hash(user_data.password)
     
-    # Create new user
+    # Create new user — always starts as regular user
     new_user = User(
         email=user_data.email,
         hashed_password=hashed_password,
         full_name=user_data.full_name,
         mobile_number=user_data.mobile_number,
-        is_admin=False
+        is_admin=False,
+        role="user",
+        department=None,
     )
     
     db.add(new_user)
@@ -603,7 +628,7 @@ async def signup(user_data: UserCreateEnhanced, db: AsyncSession = Depends(get_d
 
 @app.post("/api/login")
 async def login(login_data: UserLogin, db: AsyncSession = Depends(get_db)):
-    # Check mock users first
+    # Check mock users first (no lockout for mock users)
     if login_data.email in MOCK_USERS:
         mock_user = MOCK_USERS[login_data.email]
         if login_data.password == mock_user["password"]:
@@ -622,30 +647,64 @@ async def login(login_data: UserLogin, db: AsyncSession = Depends(get_db)):
                 "email": mock_user["email"],
                 "message": "Login successful (Mock Mode)"
             }
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password"
+        )
 
     result = await db.execute(
         select(User).filter(User.email == login_data.email)
     )
     user = result.scalar_one_or_none()
 
+    # Feature 11: Account lockout check
+    if user:
+        now = datetime.utcnow()
+        if user.locked_until and now < user.locked_until:
+            remaining = int((user.locked_until - now).total_seconds() / 60) + 1
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Account locked due to too many failed attempts. Try again in {remaining} minute(s)."
+            )
+
     if not user or not verify_password(login_data.password, user.hashed_password):
+        # Increment failed attempts for real users
+        if user:
+            user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+            if user.failed_login_attempts >= 5:
+                user.locked_until = datetime.utcnow() + timedelta(minutes=15)
+                await db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many failed login attempts. Account locked for 15 minutes."
+                )
+            await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
 
+    # Successful login — reset lockout counters
+    user.failed_login_attempts = 0
+    user.locked_until = None
+
     access_token = create_access_token(
         data={
             "sub": user.email,
-            "is_admin": user.is_admin
+            "is_admin": user.is_admin,
+            "role": getattr(user, "role", "user"),
+            "department": getattr(user, "department", None),
         }
     )
+    await db.commit()
 
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user_id": user.id,
         "is_admin": user.is_admin,
+        "role": getattr(user, "role", "user"),
+        "department": getattr(user, "department", None),
         "full_name": user.full_name,
         "email": user.email,
         "message": "Login successful"
@@ -2835,4 +2894,547 @@ async def get_citizen_trust_score(
         "total_issues": total,
         "resolved_issues": resolved,
         "message": "Citizen trust score calculated successfully"
+    }
+
+
+# =============================================================================
+# FEATURE 1: FCM Token Registration (Push Notifications)
+# =============================================================================
+
+class FCMTokenUpdate(BaseModel):
+    fcm_token: str
+
+
+@app.post("/api/users/fcm-token")
+async def update_fcm_token(
+    token_data: FCMTokenUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Store the device FCM token for the authenticated user."""
+    current_user.fcm_token = token_data.fcm_token
+    await db.commit()
+    return {"message": "FCM token updated"}
+
+
+# =============================================================================
+# FEATURE 2: Image Upload for a Report
+# =============================================================================
+
+import uuid, json as _json
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+
+_UPLOAD_DIR = Path("uploads/report_images")
+_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+# Mount static files for serving uploaded images
+try:
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+except Exception:
+    pass  # Already mounted
+
+
+@app.post("/api/reports/{report_id}/image")
+async def upload_report_image(
+    report_id: int,
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload an image for a report (multipart/form-data)."""
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.user_email != current_user.email and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorised")
+
+    ext = Path(image.filename).suffix.lower() if image.filename else ".jpg"
+    filename = f"{report_id}_{uuid.uuid4().hex}{ext}"
+    dest = _UPLOAD_DIR / filename
+
+    content = await image.read()
+    dest.write_bytes(content)
+
+    existing: list = _json.loads(report.images) if report.images else []
+    existing.append(f"/uploads/report_images/{filename}")
+    report.images = _json.dumps(existing)
+
+    await db.commit()
+    return {"message": "Image uploaded", "url": f"/uploads/report_images/{filename}"}
+
+
+# =============================================================================
+# FEATURE 4: Password Reset via Email
+# =============================================================================
+
+import secrets as _secrets
+
+RESET_TOKEN_EXPIRE_MINUTES = 30
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator("new_password")
+    def password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain an uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain a lowercase letter")
+        if not re.search(r"[0-9]", v):
+            raise ValueError("Password must contain a digit")
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/~`]', v):
+            raise ValueError("Password must contain a special character")
+        return v
+
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(
+    req: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate a time-limited reset token.
+    In production wire up fastapi-mail here.
+    For development the token is returned in the response.
+    """
+    result = await db.execute(select(User).where(User.email == req.email))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        # Don't reveal whether the email exists
+        return {"message": "If that email exists, a reset link has been sent."}
+
+    token = _secrets.token_urlsafe(32)
+    user.reset_token = token
+    user.reset_token_expires = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
+    await db.commit()
+
+    return {
+        "message": "Reset token generated. Check your email.",
+        "dev_token": token,          # Remove in production
+        "expires_in_minutes": RESET_TOKEN_EXPIRE_MINUTES,
+    }
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(
+    req: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(User).where(User.reset_token == req.token)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if user.reset_token_expires and datetime.utcnow() > user.reset_token_expires:
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+
+    user.hashed_password = get_password_hash(req.new_password)
+    user.reset_token = None
+    user.reset_token_expires = None
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    await db.commit()
+
+    return {"message": "Password reset successfully. You can now log in."}
+
+
+# =============================================================================
+# FEATURE 8: Confirm / Upvote a Report
+# =============================================================================
+
+@app.post("/api/reports/{report_id}/confirm")
+async def confirm_report(
+    report_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Let a citizen confirm they have also seen this issue (upvote)."""
+    r_result = await db.execute(select(Report).where(Report.id == report_id))
+    report = r_result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    c_result = await db.execute(
+        select(Confirmation).where(
+            Confirmation.report_id == report_id,
+            Confirmation.user_id == current_user.id,
+        )
+    )
+    if c_result.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="You have already confirmed this issue")
+
+    db.add(Confirmation(report_id=report_id, user_id=current_user.id))
+    report.confirmation_count = (report.confirmation_count or 0) + 1
+    await db.commit()
+
+    return {"message": "Issue confirmed", "confirmation_count": report.confirmation_count}
+
+
+@app.delete("/api/reports/{report_id}/confirm")
+async def unconfirm_report(
+    report_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a previous confirmation."""
+    c_result = await db.execute(
+        select(Confirmation).where(
+            Confirmation.report_id == report_id,
+            Confirmation.user_id == current_user.id,
+        )
+    )
+    confirmation = c_result.scalar_one_or_none()
+    if not confirmation:
+        raise HTTPException(status_code=404, detail="Confirmation not found")
+
+    await db.delete(confirmation)
+
+    r_result = await db.execute(select(Report).where(Report.id == report_id))
+    report = r_result.scalar_one_or_none()
+    if report and (report.confirmation_count or 0) > 0:
+        report.confirmation_count -= 1
+
+    await db.commit()
+    return {"message": "Confirmation removed"}
+
+
+@app.get("/api/reports/{report_id}/confirm/status")
+async def get_confirm_status(
+    report_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check whether the current user has confirmed this report."""
+    c_result = await db.execute(
+        select(Confirmation).where(
+            Confirmation.report_id == report_id,
+            Confirmation.user_id == current_user.id,
+        )
+    )
+    confirmed = c_result.scalar_one_or_none() is not None
+
+    r_result = await db.execute(select(Report).where(Report.id == report_id))
+    report = r_result.scalar_one_or_none()
+    count = report.confirmation_count if report else 0
+
+    return {"confirmed": confirmed, "confirmation_count": count}
+
+
+# =============================================================================
+# FEATURE 12: Export Reports to CSV / PDF (Admin only)
+# =============================================================================
+
+import csv, io as _io
+from fastapi.responses import StreamingResponse
+
+try:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.styles import getSampleStyleSheet
+    _REPORTLAB_AVAILABLE = True
+except ImportError:
+    _REPORTLAB_AVAILABLE = False
+
+
+@app.get("/api/admin/export/csv")
+async def export_reports_csv(
+    status_filter: Optional[str] = None,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export all reports as a CSV file (admin only)."""
+    stmt = select(Report).order_by(Report.created_at.desc())
+    if status_filter and status_filter.lower() != "all":
+        stmt = stmt.where(Report.status == status_filter)
+
+    result = await db.execute(stmt)
+    reports = result.scalars().all()
+
+    output = _io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "ID", "Title", "Description", "Category", "Urgency",
+        "Status", "Department", "Location", "Latitude", "Longitude",
+        "User Name", "User Email", "Created At", "Updated At", "Confirmations",
+    ])
+    for r in reports:
+        writer.writerow([
+            r.id, r.title, r.description, r.category, r.urgency_level,
+            r.status, r.department, r.location_address,
+            r.location_lat, r.location_long,
+            r.user_name, r.user_email,
+            r.created_at.isoformat() if r.created_at else "",
+            r.updated_at.isoformat() if r.updated_at else "",
+            r.confirmation_count or 0,
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=civic_eye_reports.csv"},
+    )
+
+
+@app.get("/api/admin/export/pdf")
+async def export_reports_pdf(
+    status_filter: Optional[str] = None,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export all reports as a PDF file (admin only)."""
+    if not _REPORTLAB_AVAILABLE:
+        raise HTTPException(
+            status_code=501,
+            detail="PDF export requires reportlab. Install it: pip install reportlab",
+        )
+
+    stmt = select(Report).order_by(Report.created_at.desc())
+    if status_filter and status_filter.lower() != "all":
+        stmt = stmt.where(Report.status == status_filter)
+
+    result = await db.execute(stmt)
+    reports = result.scalars().all()
+
+    buffer = _io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("CivicEye — Reports Export", styles["Title"]))
+    elements.append(Paragraph(
+        f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}  |  Total: {len(reports)}",
+        styles["Normal"],
+    ))
+
+    headers = ["ID", "Title", "Status", "Urgency", "Department", "Created"]
+    data = [headers]
+    for r in reports:
+        data.append([
+            str(r.id),
+            (r.title or "")[:40],
+            r.status or "",
+            r.urgency_level or "",
+            r.department or "",
+            r.created_at.strftime("%Y-%m-%d") if r.created_at else "",
+        ])
+
+    table = Table(data, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), rl_colors.HexColor("#6C63FF")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), rl_colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [rl_colors.white, rl_colors.HexColor("#F5F5FF")]),
+        ("GRID", (0, 0), (-1, -1), 0.5, rl_colors.grey),
+        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elements.append(table)
+    doc.build(elements)
+
+    buffer.seek(0)
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=civic_eye_reports.pdf"},
+    )
+
+
+# =============================================================================
+# USER MANAGEMENT — Super Admin only
+# =============================================================================
+
+from app.models import ROLE_USER, ROLE_DEPT_ADMIN, ROLE_SUPER_ADMIN, VALID_DEPARTMENTS
+
+
+class AssignRoleRequest(BaseModel):
+    role: str          # "user" | "dept_admin" | "super_admin"
+    department: Optional[str] = None   # required when role == "dept_admin"
+
+    @field_validator("role")
+    def validate_role(cls, v):
+        if v not in (ROLE_USER, ROLE_DEPT_ADMIN, ROLE_SUPER_ADMIN):
+            raise ValueError(f"role must be one of: {ROLE_USER}, {ROLE_DEPT_ADMIN}, {ROLE_SUPER_ADMIN}")
+        return v
+
+    @field_validator("department")
+    def validate_department(cls, v, info):
+        if info.data.get("role") == ROLE_DEPT_ADMIN:
+            if not v:
+                raise ValueError("department is required for dept_admin role")
+            if v not in VALID_DEPARTMENTS:
+                raise ValueError(f"department must be one of: {', '.join(VALID_DEPARTMENTS)}")
+        return v
+
+
+@app.get("/api/super-admin/users")
+async def list_all_users(
+    role_filter: Optional[str] = None,
+    current_user: User = Depends(get_current_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all registered users. Super admin only."""
+    stmt = select(User).order_by(User.created_at.desc())
+    if role_filter:
+        stmt = stmt.where(User.role == role_filter)
+    result = await db.execute(stmt)
+    users = result.scalars().all()
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "full_name": u.full_name,
+            "mobile_number": u.mobile_number,
+            "is_admin": u.is_admin,
+            "role": getattr(u, "role", ROLE_USER),
+            "department": getattr(u, "department", None),
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
+        for u in users
+    ]
+
+
+@app.patch("/api/super-admin/users/{user_id}/role")
+async def assign_user_role(
+    user_id: int,
+    body: AssignRoleRequest,
+    current_user: User = Depends(get_current_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Promote/demote a user's role. Super admin only."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Prevent demoting yourself
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+
+    target.role = body.role
+    target.department = body.department if body.role == ROLE_DEPT_ADMIN else None
+    target.is_admin = body.role in (ROLE_DEPT_ADMIN, ROLE_SUPER_ADMIN)
+
+    await db.commit()
+    return {
+        "message": f"User {target.email} role updated to {body.role}",
+        "user_id": target.id,
+        "role": target.role,
+        "department": target.department,
+    }
+
+
+@app.delete("/api/super-admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a user account. Super admin only."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    await db.delete(target)
+    await db.commit()
+    return {"message": f"User {target.email} deleted"}
+
+
+@app.get("/api/super-admin/stats")
+async def super_admin_stats(
+    current_user: User = Depends(get_current_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Overview stats for the super admin dashboard."""
+    total_users = await db.scalar(select(func.count(User.id)))
+    dept_admins = await db.scalar(select(func.count(User.id)).where(User.role == ROLE_DEPT_ADMIN))
+    super_admins = await db.scalar(select(func.count(User.id)).where(User.role == ROLE_SUPER_ADMIN))
+    total_reports = await db.scalar(select(func.count(Report.id)))
+
+    # Users per department admin
+    dept_result = await db.execute(
+        select(User.department, func.count(User.id))
+        .where(User.role == ROLE_DEPT_ADMIN)
+        .group_by(User.department)
+    )
+    dept_admins_map = {d: c for d, c in dept_result.all() if d}
+
+    return {
+        "total_users": total_users or 0,
+        "dept_admins": dept_admins or 0,
+        "super_admins": super_admins or 0,
+        "regular_users": (total_users or 0) - (dept_admins or 0) - (super_admins or 0),
+        "total_reports": total_reports or 0,
+        "dept_admins_by_department": dept_admins_map,
+    }
+
+
+@app.post("/api/super-admin/create-admin")
+async def create_admin_user(
+    user_data: UserCreateEnhanced,
+    role: str = "dept_admin",
+    department: Optional[str] = None,
+    current_user: User = Depends(get_current_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Super admin creates a new admin account directly
+    (bypasses the self-signup restriction).
+    """
+    if role not in (ROLE_DEPT_ADMIN, ROLE_SUPER_ADMIN):
+        raise HTTPException(status_code=400, detail="role must be dept_admin or super_admin")
+    if role == ROLE_DEPT_ADMIN and (not department or department not in VALID_DEPARTMENTS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"department required for dept_admin. Valid: {', '.join(VALID_DEPARTMENTS)}"
+        )
+
+    # Check duplicates
+    existing = await db.scalar(select(User).where(User.email == user_data.email))
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    existing_mob = await db.scalar(select(User).where(User.mobile_number == user_data.mobile_number))
+    if existing_mob:
+        raise HTTPException(status_code=400, detail="Mobile number already registered")
+
+    new_admin = User(
+        email=user_data.email,
+        hashed_password=get_password_hash(user_data.password),
+        full_name=user_data.full_name,
+        mobile_number=user_data.mobile_number,
+        is_admin=True,
+        role=role,
+        department=department if role == ROLE_DEPT_ADMIN else None,
+    )
+    db.add(new_admin)
+    await db.commit()
+    await db.refresh(new_admin)
+
+    return {
+        "message": f"Admin account created for {new_admin.email}",
+        "user_id": new_admin.id,
+        "role": new_admin.role,
+        "department": new_admin.department,
     }

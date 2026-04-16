@@ -15,6 +15,12 @@ class AppTheme {
   static const textSecondary = Color(0xFF94A3B8);
   static const bgDark = Color(0xFF0D0D1A);
 
+  // Light theme colors
+  static const bgLight = Color(0xFFF5F5FF);
+  static const surfaceCardLight = Color(0xFFFFFFFF);
+  static const textPrimaryLight = Color(0xFF1A1A2E);
+  static const textSecondaryLight = Color(0xFF64748B);
+
   // Status colors
   static const statusPending = Color(0xFFFFB347);
   static const statusInProgress = Color(0xFF4FC3F7);
@@ -53,7 +59,8 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: surfaceCard,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -78,9 +85,12 @@ class AppTheme {
           backgroundColor: primary,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          padding:
+              const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
@@ -88,7 +98,8 @@ class AppTheme {
         indicatorColor: primary.withAlpha(50),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return const TextStyle(color: primary, fontSize: 12, fontWeight: FontWeight.w600);
+            return const TextStyle(
+                color: primary, fontSize: 12, fontWeight: FontWeight.w600);
           }
           return const TextStyle(color: textSecondary, fontSize: 12);
         }),
@@ -97,6 +108,86 @@ class AppTheme {
             return const IconThemeData(color: primary);
           }
           return const IconThemeData(color: textSecondary);
+        }),
+      ),
+    );
+  }
+
+  static ThemeData get light {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: bgLight,
+      colorScheme: const ColorScheme.light(
+        primary: primary,
+        secondary: secondary,
+        surface: surfaceCardLight,
+        error: accent,
+      ),
+      textTheme: GoogleFonts.poppinsTextTheme(ThemeData.light().textTheme),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: textPrimaryLight,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+        ),
+        iconTheme: IconThemeData(color: textPrimaryLight),
+      ),
+      cardTheme: CardThemeData(
+        color: surfaceCardLight,
+        elevation: 0,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: surfaceCardLight,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: primary, width: 2),
+        ),
+        labelStyle: const TextStyle(color: textSecondaryLight),
+        hintStyle: const TextStyle(color: Color(0xFFADB5BD)),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding:
+              const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle:
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: surfaceCardLight,
+        indicatorColor: primary.withAlpha(30),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const TextStyle(
+                color: primary, fontSize: 12, fontWeight: FontWeight.w600);
+          }
+          return const TextStyle(color: textSecondaryLight, fontSize: 12);
+        }),
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: primary);
+          }
+          return const IconThemeData(color: textSecondaryLight);
         }),
       ),
     );

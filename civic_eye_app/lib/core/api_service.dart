@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -77,6 +78,48 @@ class ApiService {
     throw _extractError(data, 'Update failed');
   }
 
+  // ── Feature 4: Password Reset ─────────────────────────
+
+  static Future<Map<String, dynamic>> forgotPassword(String email) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/auth/forgot-password'),
+          headers: _headers(),
+          body: jsonEncode({'email': email}),
+        )
+        .timeout(const Duration(seconds: 15));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to send reset email');
+  }
+
+  static Future<void> resetPassword(
+      String token, String newPassword) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/auth/reset-password'),
+          headers: _headers(),
+          body: jsonEncode({'token': token, 'new_password': newPassword}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      throw _extractError(data, 'Password reset failed');
+    }
+  }
+
+  // ── Feature 1: FCM Token ──────────────────────────────
+
+  static Future<void> updateFcmToken(String token, String fcmToken) async {
+    await http
+        .post(
+          Uri.parse('$baseUrl/api/users/fcm-token'),
+          headers: _headers(token: token),
+          body: jsonEncode({'fcm_token': fcmToken}),
+        )
+        .timeout(const Duration(seconds: 10));
+  }
+
   // ── Reports ───────────────────────────────────────────
 
   static Future<Map<String, dynamic>> submitReport({
@@ -116,8 +159,251 @@ class ApiService {
     throw _extractError(data, 'Failed to submit report');
   }
 
-  /// Fetches reports for the currently authenticated user via the dedicated
-  /// backend endpoint (filters server-side by user email from JWT).
+  // ── Feature 2: Image Upload ───────────────────────────
+
+  static Future<String> uploadReportImage(
+      String token, int reportId, File imageFile) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/api/reports/$reportId/image'),
+    );
+    request.headers['Authorization'] = 'Bearer $token';
+    request.files.add(
+      await http.MultipartFile.fromPath('image', imageFile.path),
+    );
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final res = await http.Response.fromStream(streamed);
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data['url'] as String;
+    throw _extractError(data, 'Image upload failed');
+  }
+
+  // ── Feature 3: Report Detail + Timeline ──────────────
+
+  static Future<Map<String, dynamic>> getReportTimeline(
+      int reportId) async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/api/reports/$reportId/timeline'))
+        .timeout(const Duration(seconds: 15));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to load report details');
+  }
+
+  // ── Feature 6: Search Reports ─────────────────────────
+
+  static Future<List<dynamic>> searchUserReports(
+      String userEmail, String query) async {
+    final res = await http
+        .get(
+          Uri.parse(
+              '$baseUrl/users/reports/search?query=${Uri.encodeComponent(query)}&user_email=${Uri.encodeComponent(userEmail)}'),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      return data['complaints'] as List<dynamic>? ?? [];
+    }
+    throw 'Search failed';
+  }
+
+  // ── Feature 8: Confirmations / Upvotes ───────────────
+
+  static Future<Map<String, dynamic>> confirmReport(
+      String token, int reportId) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/reports/$reportId/confirm'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 10));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to confirm report');
+  }
+
+  static Future<void> unconfirmReport(String token, int reportId) async {
+    final res = await http
+        .delete(
+          Uri.parse('$baseUrl/api/reports/$reportId/confirm'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      throw _extractError(data, 'Failed to remove confirmation');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getConfirmStatus(
+      String token, int reportId) async {
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/reports/$reportId/confirm/status'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 10));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to get confirm status');
+  }
+
+  // ── Feature 9: Department Performance ────────────────
+
+  static Future<Map<String, dynamic>> getDepartmentSummary() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/api/departments/summary'))
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw 'Failed to load department summary';
+  }
+
+  static Future<Map<String, dynamic>> getResolutionTrends() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/api/departments/resolution-trends'))
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw 'Failed to load resolution trends';
+  }
+
+  // ── Feature 7: Admin Map ──────────────────────────────
+
+  static Future<Map<String, dynamic>> getMapIssues(
+      {String? statusFilter}) async {
+    final params = statusFilter != null ? '?status=$statusFilter' : '';
+    final res = await http
+        .get(Uri.parse('$baseUrl/api/admin/map/issues$params'))
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw 'Failed to load map issues';
+  }
+
+  // ── Super Admin: User Management ─────────────────────
+
+  static Future<List<dynamic>> listAllUsers(String token,
+      {String? roleFilter}) async {
+    final params = roleFilter != null ? '?role_filter=$roleFilter' : '';
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/super-admin/users$params'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) return jsonDecode(res.body) as List<dynamic>;
+    throw _extractError(
+        jsonDecode(res.body) as Map<String, dynamic>, 'Failed to load users');
+  }
+
+  static Future<Map<String, dynamic>> assignUserRole(
+    String token,
+    int userId,
+    String role, {
+    String? department,
+  }) async {
+    final res = await http
+        .patch(
+          Uri.parse('$baseUrl/api/super-admin/users/$userId/role'),
+          headers: _headers(token: token),
+          body: jsonEncode({'role': role, 'department': department}),
+        )
+        .timeout(const Duration(seconds: 15));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to update role');
+  }
+
+  static Future<void> deleteUser(String token, int userId) async {
+    final res = await http
+        .delete(
+          Uri.parse('$baseUrl/api/super-admin/users/$userId'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      throw _extractError(data, 'Failed to delete user');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getSuperAdminStats(String token) async {
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/super-admin/stats'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw 'Failed to load stats';
+  }
+
+  static Future<Map<String, dynamic>> createAdminUser({
+    required String token,
+    required String email,
+    required String password,
+    required String fullName,
+    required String mobile,
+    required String role,
+    String? department,
+  }) async {
+    final params = 'role=$role${department != null ? '&department=$department' : ''}';
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/api/super-admin/create-admin?$params'),
+          headers: _headers(token: token),
+          body: jsonEncode({
+            'email': email,
+            'password': password,
+            'full_name': fullName,
+            'mobile_number': mobile,
+            'is_admin': false,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to create admin');
+  }
+
+  // ── Feature 12: Export ────────────────────────────────
+
+  static Future<List<int>> exportCsv(String token,
+      {String? statusFilter}) async {
+    final params =
+        statusFilter != null ? '?status_filter=$statusFilter' : '';
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/admin/export/csv$params'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (res.statusCode == 200) return res.bodyBytes;
+    throw 'Export failed';
+  }
+
+  static Future<List<int>> exportPdf(String token,
+      {String? statusFilter}) async {
+    final params =
+        statusFilter != null ? '?status_filter=$statusFilter' : '';
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/admin/export/pdf$params'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (res.statusCode == 200) return res.bodyBytes;
+    throw 'Export failed';
+  }
+
+  // ── Existing endpoints ────────────────────────────────
+
   static Future<List<dynamic>> getUserReports(String token,
       {String filter = 'all'}) async {
     final res = await http
@@ -134,7 +420,6 @@ class ApiService {
     throw 'Failed to load your reports';
   }
 
-  /// Fetches all reports (admin use).
   static Future<List<dynamic>> getAllReports({String? token}) async {
     final res = await http
         .get(

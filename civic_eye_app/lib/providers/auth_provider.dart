@@ -12,7 +12,12 @@ class AuthProvider with ChangeNotifier {
   String? get token => _token;
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _user != null;
-  bool get isAdmin => _user?.isAdmin ?? false;
+
+  // Role helpers
+  bool get isAdmin => _user?.isAnyAdmin ?? false;
+  bool get isSuperAdmin => _user?.isSuperAdmin ?? false;
+  bool get isDeptAdmin => _user?.isDeptAdmin ?? false;
+  String? get adminDepartment => _user?.department;
 
   AuthProvider() {
     _restoreSession();
@@ -28,7 +33,6 @@ class AuthProvider with ChangeNotifier {
         _token = savedToken;
       }
     } catch (e) {
-      // Token expired or invalid — clear it
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('auth_token');
       debugPrint('Session restore error: $e');
@@ -42,12 +46,16 @@ class AuthProvider with ChangeNotifier {
     try {
       final data = await ApiService.login(email.trim(), password);
       _token = data['access_token'];
-      // Fetch full profile
+      // Fetch full profile (includes role + department)
       final profile = await ApiService.getMe(_token!);
       _user = UserModel.fromApi(profile);
-      // Also patch isAdmin from login response if profile doesn't have it
-      if (data['is_admin'] != null) {
-        _user = _user!.copyWith(isAdmin: data['is_admin'] as bool);
+      // Patch role/department from login response if profile doesn't have it
+      if (data['role'] != null) {
+        _user = _user!.copyWith(
+          role: data['role'] as String?,
+          department: data['department'] as String?,
+          isAdmin: data['is_admin'] as bool?,
+        );
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('auth_token', _token!);
@@ -73,7 +81,6 @@ class AuthProvider with ChangeNotifier {
         fullName: fullName.trim(),
         mobile: mobile.trim(),
       );
-      // Auto-login after registration
       return await login(email, password);
     } catch (e) {
       debugPrint('Register error: $e');
@@ -94,8 +101,7 @@ class AuthProvider with ChangeNotifier {
       {required String fullName, required String mobile}) async {
     if (_user == null || _token == null) return;
     try {
-      final data =
-          await ApiService.updateProfile(_token!, fullName, mobile);
+      final data = await ApiService.updateProfile(_token!, fullName, mobile);
       _user = UserModel.fromApi(data);
       notifyListeners();
     } catch (e) {

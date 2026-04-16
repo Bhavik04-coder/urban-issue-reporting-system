@@ -7,11 +7,13 @@ class ReportProvider with ChangeNotifier {
   Map<String, int> _stats = {};
   bool _isLoading = false;
   String? _error;
+  int? _lastSubmittedId; // Feature 2: track last submitted report ID
 
   List<ReportModel> get reports => _reports;
   Map<String, int> get stats => _stats;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  int? get lastSubmittedId => _lastSubmittedId;
 
   // ── User reports (server-side filtered by JWT identity) ──────────────────
 
@@ -70,7 +72,7 @@ class ReportProvider with ChangeNotifier {
     double locationLong = 0.0,
   }) async {
     try {
-      await ApiService.submitReport(
+      final data = await ApiService.submitReport(
         token: token,
         userName: userName,
         userMobile: userMobile,
@@ -83,6 +85,8 @@ class ReportProvider with ChangeNotifier {
         locationLat: locationLat,
         locationLong: locationLong,
       );
+      // Feature 2: store the new report ID for image upload
+      _lastSubmittedId = data['report_id'] as int?;
       // Refresh user reports after submit
       await loadUserReports(userEmail, token: token);
       return null; // success

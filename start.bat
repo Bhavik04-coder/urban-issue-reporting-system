@@ -20,16 +20,21 @@ if not exist "backend\venv" (
     cd ..
     echo [SETUP] Backend setup complete!
     echo.
-)
-
-REM ── Flutter Setup ─────────────────────────────────────
-if not exist "civic_eye_app\.dart_tool" (
-    echo [SETUP] Installing Flutter dependencies...
-    cd civic_eye_app
-    flutter pub get
+) else (
+    echo [SETUP] Updating backend dependencies...
+    cd backend
+    call venv\Scripts\activate
+    pip install -r requirements.txt --quiet
     cd ..
     echo.
 )
+
+REM ── Flutter Setup ─────────────────────────────────────
+echo [SETUP] Installing/updating Flutter dependencies...
+cd civic_eye_app
+flutter pub get
+cd ..
+echo.
 
 REM ── Start Backend ─────────────────────────────────────
 echo [START] Starting Backend Server...
