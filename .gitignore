@@ -55,6 +55,22 @@ frontend/**/.kotlin/
 Thumbs.db
 desktop.ini
 
+# ---------- Flutter ----------
+civic_eye_app/build/
+civic_eye_app/.dart_tool/
+civic_eye_app/.flutter-plugins
+civic_eye_app/.flutter-plugins-dependencies
+civic_eye_app/pubspec.lock
+civic_eye_app/android/.gradle/
+civic_eye_app/android/local.properties
+civic_eye_app/android/app/debug.keystore
+civic_eye_app/ios/Pods/
+civic_eye_app/ios/.symlinks/
+civic_eye_app/ios/Flutter/Generated.xcconfig
+civic_eye_app/ios/Flutter/flutter_export_environment.sh
+civic_eye_app/web/sqlite3.wasm
+civic_eye_app/web/sqflite_sw.js
+
 # ---------- Logs ----------
 *.log
 

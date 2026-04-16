@@ -1,13 +1,13 @@
 @echo off
-title UrbanSim AI - Startup
+title CivicEye - Startup
 color 0A
 
 echo ========================================
-echo    UrbanSim AI - Starting Application
+echo       CivicEye - Starting Application
 echo ========================================
 echo.
 
-REM Check if this is first run
+REM ── Backend Setup ─────────────────────────────────────
 if not exist "backend\venv" (
     echo [SETUP] First time setup detected...
     echo [SETUP] Creating Python virtual environment...
@@ -18,34 +18,40 @@ if not exist "backend\venv" (
     pip install -r requirements.txt
     pip install argon2-cffi
     cd ..
-    echo [SETUP] Setup complete!
+    echo [SETUP] Backend setup complete!
     echo.
 )
 
-if not exist "flutter_app\.dart_tool" (
+REM ── Flutter Setup ─────────────────────────────────────
+if not exist "civic_eye_app\.dart_tool" (
     echo [SETUP] Installing Flutter dependencies...
-    cd flutter_app
+    cd civic_eye_app
     flutter pub get
     cd ..
     echo.
 )
 
+REM ── Start Backend ─────────────────────────────────────
 echo [START] Starting Backend Server...
-start "UrbanSim Backend" cmd /k "cd backend && venv\Scripts\activate && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+start "CivicEye Backend" cmd /k "cd backend && venv\Scripts\activate && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
 
 timeout /t 5 /nobreak >nul
 
-echo [START] Starting Flutter App...
-start "UrbanSim Flutter" cmd /k "cd flutter_app && flutter run -d chrome"
+REM ── Start Flutter App ─────────────────────────────────
+echo [START] Starting Flutter App (Chrome)...
+start "CivicEye Flutter" cmd /k "cd civic_eye_app && flutter run -d chrome"
 
 echo.
 echo ========================================
-echo    Application Started Successfully!
+echo       Application Started!
 echo ========================================
 echo.
-echo Backend API: http://localhost:8000
-echo API Docs: http://localhost:8000/docs
-echo Flutter App: Opening in Chrome...
+echo  Backend API : http://localhost:8000
+echo  API Docs    : http://localhost:8000/docs
+echo  Flutter App : Opening in Chrome...
 echo.
-echo Press any key to exit this window...
+echo  NOTE: The Flutter app uses local SQLite storage.
+echo  Backend is optional (for AI prediction features).
+echo.
+echo Press any key to close this window...
 pause >nul
