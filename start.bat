@@ -39,7 +39,7 @@ timeout /t 5 /nobreak >nul
 
 REM ── Start Flutter App ─────────────────────────────────
 echo [START] Starting Flutter App (Chrome)...
-start "CivicEye Flutter" cmd /k "cd civic_eye_app && flutter run -d chrome"
+start "CivicEye Flutter" cmd /k "cd civic_eye_app && flutter run -d chrome --web-browser-flag --disable-web-security --web-header Cross-Origin-Opener-Policy=same-origin --web-header Cross-Origin-Embedder-Policy=require-corp"
 
 echo.
 echo ========================================

@@ -187,13 +187,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               TextSpan(text: 'Admin: '),
                               TextSpan(
-                                  text: 'admin@civiceye.com',
+                                  text: 'admin@example.com',
                                   style: TextStyle(
                                       color: AppTheme.primary,
                                       fontWeight: FontWeight.w600)),
                               TextSpan(text: '  /  '),
                               TextSpan(
-                                  text: 'Admin@123',
+                                  text: 'admin123',
                                   style: TextStyle(
                                       color: AppTheme.primary,
                                       fontWeight: FontWeight.w600)),

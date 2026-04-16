@@ -22,7 +22,8 @@ class _AdminReportsTabState extends State<AdminReportsTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReportProvider>().loadAllReports();
+      final token = context.read<AuthProvider>().token;
+      context.read<ReportProvider>().loadAllReports(token: token);
     });
   }
 
@@ -307,13 +308,13 @@ class _AdminReportCard extends StatelessWidget {
 
   void _updateStatus(BuildContext context, String status) async {
     final auth = context.read<AuthProvider>();
-    await context
+    final error = await context
         .read<ReportProvider>()
-        .updateStatus(report.id!, status, auth.user!.id!);
+        .updateStatus(report.id!, status, auth.token!);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Status updated to $status'),
-        backgroundColor: AppTheme.statusResolved,
+        content: Text(error == null ? 'Status updated to $status' : 'Error: $error'),
+        backgroundColor: error == null ? AppTheme.statusResolved : AppTheme.accent,
         behavior: SnackBarBehavior.floating,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -342,10 +343,11 @@ class _AdminReportCard extends StatelessWidget {
             style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.accent),
             onPressed: () async {
+              final token = context.read<AuthProvider>().token!;
               Navigator.pop(context);
               await context
                   .read<ReportProvider>()
-                  .deleteReport(report.id!);
+                  .deleteReport(report.id!, token);
             },
             child: const Text('Delete'),
           ),

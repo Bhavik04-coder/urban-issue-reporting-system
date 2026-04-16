@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
-import '../../models/report_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/report_provider.dart';
 
@@ -26,6 +26,9 @@ class _ReportScreenState extends State<ReportScreen> {
   String _urgency = 'Medium';
   XFile? _image;
   bool _submitting = false;
+  bool _fetchingLocation = false;
+  double _locationLat = 0.0;
+  double _locationLong = 0.0;
 
   static const _categories = [
     'Road Maintenance',
@@ -63,8 +66,48 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final file =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (file != null) setState(() => _image = file);
+  }
+
+  Future<void> _fetchLocation() async {
+    setState(() => _fetchingLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showSnack('Location services are disabled. Please enable them.');
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showSnack('Location permission denied.');
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _showSnack(
+            'Location permission permanently denied. Enable it in settings.');
+        return;
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      setState(() {
+        _locationLat = pos.latitude;
+        _locationLong = pos.longitude;
+        _locationCtrl.text =
+            '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
+      });
+    } catch (e) {
+      _showSnack('Could not get location: $e');
+    } finally {
+      setState(() => _fetchingLocation = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -72,33 +115,29 @@ class _ReportScreenState extends State<ReportScreen> {
     setState(() => _submitting = true);
 
     final auth = context.read<AuthProvider>();
-    final now = DateTime.now().toIso8601String();
-    final report = ReportModel(
-      userId: auth.user!.id!,
-      title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim(),
-      category: _category,
-      urgency: _urgency,
-      locationAddress: _locationCtrl.text.trim().isEmpty
-          ? null
-          : _locationCtrl.text.trim(),
-      imagePath: _image?.path,
-      createdAt: now,
-      updatedAt: now,
-    );
-
-    final ok = await context.read<ReportProvider>().submitReport(report);
+    final error = await context.read<ReportProvider>().submitReport(
+          token: auth.token!,
+          userName: auth.user!.fullName,
+          userMobile: auth.user!.mobile,
+          userEmail: auth.user!.email,
+          title: _titleCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          category: _category,
+          urgency: _urgency,
+          locationAddress: _locationCtrl.text.trim().isEmpty
+              ? null
+              : _locationCtrl.text.trim(),
+          locationLat: _locationLat,
+          locationLong: _locationLong,
+        );
     if (!mounted) return;
     setState(() => _submitting = false);
 
-    if (ok) {
+    if (error == null) {
       _showSuccess();
       _reset();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Failed to submit. Try again.'),
-        backgroundColor: AppTheme.accent,
-      ));
+      _showSnack(error, isError: true);
     }
   }
 
@@ -110,7 +149,19 @@ class _ReportScreenState extends State<ReportScreen> {
       _category = 'Road Maintenance';
       _urgency = 'Medium';
       _image = null;
+      _locationLat = 0.0;
+      _locationLong = 0.0;
     });
+  }
+
+  void _showSnack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? AppTheme.accent : AppTheme.secondary,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
   }
 
   void _showSuccess() {
@@ -167,10 +218,10 @@ class _ReportScreenState extends State<ReportScreen> {
       backgroundColor: AppTheme.bgDark,
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
+          const SliverAppBar(
             pinned: true,
             backgroundColor: AppTheme.bgDark,
-            title: const Text('Report an Issue'),
+            title: Text('Report an Issue'),
             automaticallyImplyLeading: false,
           ),
           SliverToBoxAdapter(
@@ -182,7 +233,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Category picker
-                    _SectionLabel(label: 'Category'),
+                    const _SectionLabel(label: 'Category'),
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 48,
@@ -241,7 +292,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     const SizedBox(height: 24),
 
                     // Title
-                    _SectionLabel(label: 'Issue Title'),
+                    const _SectionLabel(label: 'Issue Title'),
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _titleCtrl,
@@ -265,7 +316,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     const SizedBox(height: 20),
 
                     // Description
-                    _SectionLabel(label: 'Description'),
+                    const _SectionLabel(label: 'Description'),
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _descCtrl,
@@ -293,25 +344,81 @@ class _ReportScreenState extends State<ReportScreen> {
                     const SizedBox(height: 20),
 
                     // Location
-                    _SectionLabel(label: 'Location (optional)'),
+                    const _SectionLabel(label: 'Location'),
                     const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _locationCtrl,
-                      style: const TextStyle(
-                          color: AppTheme.textPrimary, fontSize: 15),
-                      decoration: const InputDecoration(
-                        hintText: 'Street address or landmark',
-                        prefixIcon: Icon(Icons.location_on_outlined,
-                            color: AppTheme.textSecondary, size: 20),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 18),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _locationCtrl,
+                            style: const TextStyle(
+                                color: AppTheme.textPrimary, fontSize: 15),
+                            decoration: const InputDecoration(
+                              hintText: 'Street address or tap GPS',
+                              prefixIcon: Icon(Icons.location_on_outlined,
+                                  color: AppTheme.textSecondary, size: 20),
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 18),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        GestureDetector(
+                          onTap: _fetchingLocation ? null : _fetchLocation,
+                          child: AnimatedContainer(
+                            duration: 200.ms,
+                            width: 52,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              color: _locationLat != 0.0
+                                  ? AppTheme.secondary.withAlpha(40)
+                                  : AppTheme.surfaceCard,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: _locationLat != 0.0
+                                    ? AppTheme.secondary
+                                    : Colors.white.withAlpha(15),
+                              ),
+                            ),
+                            child: _fetchingLocation
+                                ? const Padding(
+                                    padding: EdgeInsets.all(14),
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppTheme.secondary),
+                                  )
+                                : Icon(
+                                    Icons.my_location_rounded,
+                                    color: _locationLat != 0.0
+                                        ? AppTheme.secondary
+                                        : AppTheme.textSecondary,
+                                    size: 22,
+                                  ),
+                          ),
+                        ),
+                      ],
                     ).animate(delay: 250.ms).slideY(begin: 0.1).fadeIn(),
+
+                    if (_locationLat != 0.0) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.check_circle_outline,
+                              size: 13, color: AppTheme.secondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            'GPS: ${_locationLat.toStringAsFixed(4)}, ${_locationLong.toStringAsFixed(4)}',
+                            style: const TextStyle(
+                                color: AppTheme.secondary, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
 
                     const SizedBox(height: 24),
 
                     // Urgency
-                    _SectionLabel(label: 'Urgency Level'),
+                    const _SectionLabel(label: 'Urgency Level'),
                     const SizedBox(height: 12),
                     Row(
                       children: _urgencies.map((u) {
@@ -324,7 +431,8 @@ class _ReportScreenState extends State<ReportScreen> {
                               duration: 200.ms,
                               margin: EdgeInsets.only(
                                   right: u != 'High' ? 10 : 0),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 14),
                               decoration: BoxDecoration(
                                 color: selected
                                     ? color.withAlpha(40)
@@ -371,7 +479,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     const SizedBox(height: 24),
 
                     // Image
-                    _SectionLabel(label: 'Attach Photo (optional)'),
+                    const _SectionLabel(label: 'Attach Photo (optional)'),
                     const SizedBox(height: 12),
                     GestureDetector(
                       onTap: _pickImage,
@@ -408,7 +516,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                         child: Container(
                                           padding: const EdgeInsets.all(6),
                                           decoration: BoxDecoration(
-                                            color: Colors.black.withAlpha(150),
+                                            color:
+                                                Colors.black.withAlpha(150),
                                             shape: BoxShape.circle,
                                           ),
                                           child: const Icon(Icons.close,
@@ -419,13 +528,13 @@ class _ReportScreenState extends State<ReportScreen> {
                                   ],
                                 ),
                               )
-                            : Column(
+                            : const Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Icon(Icons.add_photo_alternate_outlined,
                                       color: AppTheme.textSecondary, size: 32),
-                                  const SizedBox(height: 8),
-                                  const Text('Tap to add photo',
+                                  SizedBox(height: 8),
+                                  Text('Tap to add photo',
                                       style: TextStyle(
                                           color: AppTheme.textSecondary,
                                           fontSize: 13)),
@@ -462,7 +571,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                     width: 22,
                                     height: 22,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white))
+                                        strokeWidth: 2,
+                                        color: Colors.white))
                                 : const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [

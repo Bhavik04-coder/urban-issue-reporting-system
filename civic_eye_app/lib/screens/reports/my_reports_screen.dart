@@ -35,7 +35,10 @@ class _MyReportsScreenState extends State<MyReportsScreen>
   void _load() {
     final auth = context.read<AuthProvider>();
     if (auth.user != null) {
-      context.read<ReportProvider>().loadUserReports(auth.user!.id!);
+      context.read<ReportProvider>().loadUserReports(
+            auth.user!.email,
+            token: auth.token,
+          );
     }
   }
 

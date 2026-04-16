@@ -385,9 +385,29 @@ async def read_reports(
     limit: int = Query(100, ge=1, le=1000, description="Number of records to return"),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Report).offset(skip).limit(limit))
+    result = await db.execute(select(Report).order_by(Report.created_at.desc()).offset(skip).limit(limit))
     reports = result.scalars().all()
-    return reports
+    return [
+        {
+            "id": r.id,
+            "title": r.title,
+            "description": r.description,
+            "urgency_level": r.urgency_level,
+            "status": r.status or "Reported",
+            "department": r.department or "other",
+            "location_lat": r.location_lat,
+            "location_long": r.location_long,
+            "location_address": r.location_address,
+            "ai_label": r.ai_label if hasattr(r, 'ai_label') else None,
+            "prediction_confidence": r.prediction_confidence,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+            "user_name": r.user_name,
+            "user_mobile": r.user_mobile,
+            "user_email": r.user_email,
+        }
+        for r in reports
+    ]
 
 @app.post("/api/reports/")
 async def create_report(
@@ -454,37 +474,61 @@ async def get_report(
             detail=f"Report with ID {report_id} not found"
         )
     
-    return db_report
+    return {
+        "id": db_report.id,
+        "title": db_report.title,
+        "description": db_report.description,
+        "urgency_level": db_report.urgency_level,
+        "status": db_report.status or "Reported",
+        "department": db_report.department or "other",
+        "location_lat": db_report.location_lat,
+        "location_long": db_report.location_long,
+        "location_address": db_report.location_address,
+        "prediction_confidence": db_report.prediction_confidence,
+        "created_at": db_report.created_at.isoformat() if db_report.created_at else None,
+        "updated_at": db_report.updated_at.isoformat() if db_report.updated_at else None,
+        "user_name": db_report.user_name,
+        "user_mobile": db_report.user_mobile,
+        "user_email": db_report.user_email,
+    }
 
 @app.put("/reports/{report_id}")
 async def update_report_status(
-    report_id: int, 
+    report_id: int,
     new_status: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin)
 ):
-    result = await db.execute(select(Report).filter(Report.id == report_id))
-    db_report = result.scalar_one_or_none()
-    
+    # Fetch the report
+    report_result = await db.execute(select(Report).filter(Report.id == report_id))
+    db_report = report_result.scalar_one_or_none()
+
     if db_report is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Report with ID {report_id} not found"
         )
-    
-    result = await db.execute(select(Status).filter(Status.name == new_status))
-    status = result.scalar_one_or_none()
-    if not status:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Status '{new_status}' is not valid"
-        )
-    
-    db_report.status_id = status.id
+
+    # Look up the status row — use a different variable name to avoid shadowing
+    # the imported `status` module from fastapi
+    status_result = await db.execute(select(Status).filter(Status.name == new_status))
+    status_row = status_result.scalar_one_or_none()
+
+    if status_row is None:
+        # Status not in DB — still update the string field so the UI reflects it
+        db_report.status = new_status
+    else:
+        db_report.status_id = status_row.id
+        db_report.status = new_status
+
     await db.commit()
     await db.refresh(db_report)
-    
-    return {"message": f"Report {report_id} status updated to {new_status}", "report": db_report}
+
+    return {
+        "message": f"Report {report_id} status updated to {new_status}",
+        "report_id": db_report.id,
+        "status": db_report.status,
+    }
 
 @app.delete("/reports/{report_id}")
 async def delete_report(
@@ -602,6 +646,8 @@ async def login(login_data: UserLogin, db: AsyncSession = Depends(get_db)):
         "token_type": "bearer",
         "user_id": user.id,
         "is_admin": user.is_admin,
+        "full_name": user.full_name,
+        "email": user.email,
         "message": "Login successful"
     }
 
