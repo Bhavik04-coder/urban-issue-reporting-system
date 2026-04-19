@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   // Use localhost for web/desktop. For Android emulator use 10.0.2.2:8000
@@ -118,6 +119,64 @@ class ApiService {
           body: jsonEncode({'fcm_token': fcmToken}),
         )
         .timeout(const Duration(seconds: 10));
+  }
+
+  // ── Smart Report (image + location only) ─────────────────────────────
+
+  static Future<Map<String, dynamic>> submitSmartReport({
+    required String token,
+    required List<int> imageBytes,
+    required String imageFilename,
+    required double locationLat,
+    required double locationLong,
+    String? locationAddress,
+    String urgency = 'Medium',
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/reports/smart');
+    final request = http.MultipartRequest('POST', uri);
+    request.headers['Authorization'] = 'Bearer $token';
+
+    // Derive MIME type from filename extension so the backend always
+    // receives a proper content-type regardless of platform behaviour.
+    final ext = imageFilename.contains('.')
+        ? imageFilename.split('.').last.toLowerCase()
+        : 'jpg';
+    final mimeType = switch (ext) {
+      'png'  => 'image/png',
+      'gif'  => 'image/gif',
+      'webp' => 'image/webp',
+      'bmp'  => 'image/bmp',
+      'heic' => 'image/heic',
+      'heif' => 'image/heif',
+      _      => 'image/jpeg',   // jpg / jpeg / unknown → jpeg
+    };
+
+    request.files.add(http.MultipartFile.fromBytes(
+      'image',
+      imageBytes,
+      filename: imageFilename,
+      contentType: MediaType.parse(mimeType),
+    ));
+    request.fields['location_lat'] = locationLat.toString();
+    request.fields['location_long'] = locationLong.toString();
+    if (locationAddress != null) {
+      request.fields['location_address'] = locationAddress;
+    }
+    request.fields['urgency_level'] = urgency;
+
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final res = await http.Response.fromStream(streamed);
+
+    // Guard against non-JSON responses (e.g. plain-text 500 from server)
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw 'Server error (${res.statusCode}): ${res.body.length > 200 ? res.body.substring(0, 200) : res.body}';
+    }
+
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to submit smart report');
   }
 
   // ── Reports ───────────────────────────────────────────
@@ -450,6 +509,20 @@ class ApiService {
     final res = await http
         .delete(
           Uri.parse('$baseUrl/reports/$reportId'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      throw _extractError(data, 'Failed to delete report');
+    }
+  }
+
+  // Delete user's own report
+  static Future<void> deleteOwnReport(int reportId, String token) async {
+    final res = await http
+        .delete(
+          Uri.parse('$baseUrl/api/users/reports/$reportId'),
           headers: _headers(token: token),
         )
         .timeout(const Duration(seconds: 15));

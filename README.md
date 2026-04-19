@@ -26,13 +26,33 @@ flutter run
 
 ## Login Credentials
 
-**Test User:**
-- Email: `user@example.com`
-- Password: `user123`
+### Regular User (Test Account)
+- **Email**: `user@example.com`
+- **Password**: `user123`
 
-**Admin User:**
-- Email: `admin@example.com`
-- Password: `admin123`
+### Admin Accounts
+
+#### Super Admin 1 - Atharv Mulik
+- **Email**: `atharv@urbansim.com`
+- **Password**: `Admin@1234`
+- **Role**: Super Administrator
+- **Admin ID**: ADM-2024-001
+- **Contact**: +91 9876543210
+- **Permissions**: Full system access, user management, all departments
+
+#### Super Admin 2 - Siddhi Naik
+- **Email**: `siddhi@urbansim.com`
+- **Password**: `Admin@1234`
+- **Role**: Super Administrator
+- **Admin ID**: ADM-2024-002
+- **Contact**: +91 9123456780
+- **Permissions**: Full system access, user management, all departments
+
+**Note**: Admin accounts have elevated privileges including:
+- View and manage all reports across departments
+- Access to analytics and statistics dashboard
+- User management capabilities
+- System configuration access
 
 ## Features
 
@@ -42,6 +62,7 @@ flutter run
 - Track issue status in real-time
 - AI-powered department assignment
 - User profile management
+- **Delete your own reports** - Users can delete reports they've submitted
 
 ### Admin Features
 - Interactive map view showing all reported issues
@@ -49,6 +70,7 @@ flutter run
 - Filter issues by status and urgency level
 - Real-time statistics dashboard
 - Department performance analytics
+- Delete any report (admin privilege)
 
 ### Security Features
 - Strong password policy with validation
@@ -63,6 +85,51 @@ flutter run
 - AI: TensorFlow, scikit-learn
 - Maps: Google Maps Flutter
 - Location: Geolocator, Geocoding
+
+---
+
+## 🗑️ Delete Reports Feature
+
+### User Delete (Own Reports Only)
+
+Users can delete reports they have submitted:
+
+**How to Delete:**
+1. Go to "My Issues" tab (bottom navigation)
+2. Find the report you want to delete
+3. **Option 1**: Tap the red delete icon (🗑️) on the right side of the report card
+4. **Option 2**: Long press on the report card
+5. Confirm deletion in the dialog
+6. Report is permanently deleted
+
+**Important Notes:**
+- ✅ You can only delete your own reports
+- ✅ Deletion is permanent and cannot be undone
+- ✅ All associated data (images, confirmations) is removed
+- ❌ You cannot delete reports created by other users
+- ❌ Once deleted, the report cannot be recovered
+
+**Security:**
+- Backend validates that you own the report before deletion
+- Unauthorized deletion attempts are blocked
+- JWT authentication required
+
+### Admin Delete (All Reports)
+
+Admins can delete any report in the system:
+
+**How to Delete (Admin):**
+1. Login as admin
+2. Go to Admin Dashboard
+3. Navigate to Reports tab
+4. Find the report to delete
+5. Tap delete button
+6. Confirm deletion
+
+**Admin Permissions:**
+- ✅ Can delete any report regardless of owner
+- ✅ Can delete reports from any department
+- ✅ Full access to all report management features
 
 ---
 
