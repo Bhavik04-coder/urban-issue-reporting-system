@@ -19,7 +19,8 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReportProvider>().loadAllReports();
+      final token = context.read<AuthProvider>().token;
+      context.read<ReportProvider>().loadAllReports(token: token);
     });
   }
 
@@ -33,7 +34,10 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
       body: RefreshIndicator(
-        onRefresh: () => context.read<ReportProvider>().loadAllReports(),
+        onRefresh: () {
+          final token = context.read<AuthProvider>().token;
+          return context.read<ReportProvider>().loadAllReports(token: token);
+        },
         color: AppTheme.primary,
         backgroundColor: AppTheme.surfaceCard,
         child: CustomScrollView(

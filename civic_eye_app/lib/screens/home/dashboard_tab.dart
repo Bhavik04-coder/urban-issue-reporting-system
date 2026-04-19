@@ -26,7 +26,10 @@ class _DashboardTabState extends State<DashboardTab> {
   void _load() {
     final auth = context.read<AuthProvider>();
     if (auth.user != null) {
-      context.read<ReportProvider>().loadUserReports(auth.user!.id!);
+      context.read<ReportProvider>().loadUserReports(
+            auth.user!.email,
+            token: auth.token,
+          );
     }
   }
 

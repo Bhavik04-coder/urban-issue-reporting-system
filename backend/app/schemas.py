@@ -79,6 +79,8 @@ class UserResponse(BaseModel):
     full_name: str
     mobile_number: str
     is_admin: bool
+    role: Optional[str] = "user"
+    department: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -400,6 +402,8 @@ class UserProfileResponse(BaseModel):
     full_name: str
     mobile_number: str
     is_admin: bool
+    role: Optional[str] = "user"
+    department: Optional[str] = None
     created_at: datetime
 
     class Config:

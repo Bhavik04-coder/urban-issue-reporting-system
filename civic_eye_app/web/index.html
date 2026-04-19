@@ -29,10 +29,22 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>civic_eye_app</title>
+  <title>CivicEye</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Google Maps JS API — replace YOUR_API_KEY with a real key for map features -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY"></script>
 </head>
 <body>
+  <script>
+    // Register sqflite service worker for web SQLite support
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sqflite_sw.js').then(function(reg) {
+        console.log('sqflite SW registered:', reg.scope);
+      }).catch(function(err) {
+        console.warn('sqflite SW registration failed:', err);
+      });
+    }
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

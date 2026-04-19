@@ -1,62 +1,149 @@
 import 'package:flutter/foundation.dart';
-import '../core/database_helper.dart';
+import '../core/api_service.dart';
 import '../models/report_model.dart';
 
 class ReportProvider with ChangeNotifier {
   List<ReportModel> _reports = [];
   Map<String, int> _stats = {};
   bool _isLoading = false;
+  String? _error;
+  int? _lastSubmittedId; // Feature 2: track last submitted report ID
 
   List<ReportModel> get reports => _reports;
   Map<String, int> get stats => _stats;
   bool get isLoading => _isLoading;
+  String? get error => _error;
+  int? get lastSubmittedId => _lastSubmittedId;
 
-  Future<void> loadUserReports(int userId) async {
-    _isLoading = true;
-    notifyListeners();
-    _reports = await DatabaseHelper.instance.getReportsByUser(userId);
-    _stats = await DatabaseHelper.instance.getUserStats(userId);
-    _isLoading = false;
-    notifyListeners();
-  }
+  // ── User reports (server-side filtered by JWT identity) ──────────────────
 
-  Future<void> loadAllReports() async {
-    _isLoading = true;
-    notifyListeners();
-    _reports = await DatabaseHelper.instance.getAllReports();
-    _stats = await DatabaseHelper.instance.getAdminStats();
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<bool> submitReport(ReportModel report) async {
+  Future<void> loadUserReports(String userEmail, {String? token}) async {
+    if (token == null) return;
+    _setLoading(true);
     try {
-      final id = await DatabaseHelper.instance.insertReport(report);
-      await DatabaseHelper.instance.logActivity(
-          id, report.userId, 'report_created', 'New report: ${report.title}');
-      _reports.insert(0, report.copyWith());
-      notifyListeners();
-      return true;
+      final raw = await ApiService.getUserReports(token);
+      _reports = raw
+          .map((e) => ReportModel.fromApi(e as Map<String, dynamic>))
+          .toList();
+      _stats = _calcStats(_reports);
+      _error = null;
     } catch (e) {
-      return false;
+      debugPrint('loadUserReports error: $e');
+      _error = e.toString();
+      _reports = [];
+      _stats = {};
+    }
+    _setLoading(false);
+  }
+
+  // ── Admin: all reports ───────────────────────────────────────────────────
+
+  Future<void> loadAllReports({String? token}) async {
+    _setLoading(true);
+    try {
+      final raw = await ApiService.getAllReports(token: token);
+      _reports = raw
+          .map((e) => ReportModel.fromApi(e as Map<String, dynamic>))
+          .toList();
+      _stats = _calcStats(_reports);
+      _error = null;
+    } catch (e) {
+      debugPrint('loadAllReports error: $e');
+      _error = e.toString();
+      _reports = [];
+      _stats = {};
+    }
+    _setLoading(false);
+  }
+
+  // ── Submit ───────────────────────────────────────────────────────────────
+
+  Future<String?> submitReport({
+    required String token,
+    required String userName,
+    required String userMobile,
+    required String userEmail,
+    required String title,
+    required String description,
+    required String category,
+    required String urgency,
+    String? locationAddress,
+    double locationLat = 0.0,
+    double locationLong = 0.0,
+  }) async {
+    try {
+      final data = await ApiService.submitReport(
+        token: token,
+        userName: userName,
+        userMobile: userMobile,
+        userEmail: userEmail,
+        title: title,
+        description: description,
+        category: category,
+        urgency: urgency,
+        locationAddress: locationAddress,
+        locationLat: locationLat,
+        locationLong: locationLong,
+      );
+      // Feature 2: store the new report ID for image upload
+      _lastSubmittedId = data['report_id'] as int?;
+      // Refresh user reports after submit
+      await loadUserReports(userEmail, token: token);
+      return null; // success
+    } catch (e) {
+      debugPrint('submitReport error: $e');
+      return e.toString();
     }
   }
 
-  Future<void> updateStatus(int reportId, String status, int adminId) async {
-    await DatabaseHelper.instance.updateReportStatus(reportId, status);
-    await DatabaseHelper.instance.logActivity(
-        reportId, adminId, 'status_updated', 'Status changed to $status');
-    final idx = _reports.indexWhere((r) => r.id == reportId);
-    if (idx != -1) {
-      _reports[idx] = _reports[idx].copyWith(
-          status: status, updatedAt: DateTime.now().toIso8601String());
+  // ── Admin actions ────────────────────────────────────────────────────────
+
+  Future<String?> updateStatus(
+      int reportId, String newStatus, String token) async {
+    try {
+      await ApiService.updateReportStatus(reportId, newStatus, token);
+      final idx = _reports.indexWhere((r) => r.id == reportId);
+      if (idx != -1) {
+        _reports[idx] = _reports[idx].copyWith(
+            status: newStatus, updatedAt: DateTime.now().toIso8601String());
+        _stats = _calcStats(_reports);
+        notifyListeners();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('updateStatus error: $e');
+      return e.toString();
+    }
+  }
+
+  Future<String?> deleteReport(int reportId, String token) async {
+    try {
+      await ApiService.deleteReport(reportId, token);
+      _reports.removeWhere((r) => r.id == reportId);
+      _stats = _calcStats(_reports);
       notifyListeners();
+      return null;
+    } catch (e) {
+      debugPrint('deleteReport error: $e');
+      return e.toString();
     }
   }
 
-  Future<void> deleteReport(int reportId) async {
-    await DatabaseHelper.instance.deleteReport(reportId);
-    _reports.removeWhere((r) => r.id == reportId);
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  void _setLoading(bool v) {
+    _isLoading = v;
     notifyListeners();
+  }
+
+  Map<String, int> _calcStats(List<ReportModel> reports) {
+    return {
+      'total': reports.length,
+      'resolved': reports.where((r) => r.status == 'Resolved').length,
+      'pending': reports
+          .where((r) => r.status == 'Reported' || r.status == 'Pending')
+          .length,
+      'inProgress': reports.where((r) => r.status == 'In Progress').length,
+    };
   }
 }

@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
-import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
-import 'package:sqflite/sqflite.dart';
 import 'core/theme.dart';
+import 'core/notification_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/report_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kIsWeb) {
-    databaseFactory = databaseFactoryFfiWeb;
-  }
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
+
+  // Feature 1: Initialize local notifications
+  await NotificationService.init();
+
   runApp(const CivicEyeApp());
 }
 
@@ -28,14 +28,19 @@ class CivicEyeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ReportProvider()),
       ],
-      child: MaterialApp(
-        title: 'CivicEye',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.dark,
-        home: const SplashScreen(),
+      child: Consumer<ThemeProvider>(
+        builder: (_, themeProvider, __) => MaterialApp(
+          title: 'CivicEye',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: themeProvider.mode,
+          home: const SplashScreen(),
+        ),
       ),
     );
   }

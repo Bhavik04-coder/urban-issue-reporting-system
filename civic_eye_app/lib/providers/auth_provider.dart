@@ -1,16 +1,23 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../core/database_helper.dart';
+import '../core/api_service.dart';
 import '../models/user_model.dart';
 
 class AuthProvider with ChangeNotifier {
   UserModel? _user;
+  String? _token;
   bool _isLoading = true;
 
   UserModel? get user => _user;
+  String? get token => _token;
   bool get isLoading => _isLoading;
   bool get isLoggedIn => _user != null;
-  bool get isAdmin => _user?.isAdmin ?? false;
+
+  // Role helpers
+  bool get isAdmin => _user?.isAnyAdmin ?? false;
+  bool get isSuperAdmin => _user?.isSuperAdmin ?? false;
+  bool get isDeptAdmin => _user?.isDeptAdmin ?? false;
+  String? get adminDepartment => _user?.department;
 
   AuthProvider() {
     _restoreSession();
@@ -18,14 +25,16 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> _restoreSession() async {
     try {
-      // Ensure DB is ready before any query
-      await DatabaseHelper.instance.database;
       final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getInt('user_id');
-      if (userId != null) {
-        _user = await DatabaseHelper.instance.getUserById(userId);
+      final savedToken = prefs.getString('auth_token');
+      if (savedToken != null) {
+        final data = await ApiService.getMe(savedToken);
+        _user = UserModel.fromApi(data);
+        _token = savedToken;
       }
     } catch (e) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
       debugPrint('Session restore error: $e');
     } finally {
       _isLoading = false;
@@ -35,16 +44,26 @@ class AuthProvider with ChangeNotifier {
 
   Future<String?> login(String email, String password) async {
     try {
-      final user = await DatabaseHelper.instance.getUserByEmail(email.trim());
-      if (user == null) return 'No account found with this email';
-      if (user.passwordHash != password) return 'Incorrect password';
-      _user = user;
+      final data = await ApiService.login(email.trim(), password);
+      _token = data['access_token'];
+      // Fetch full profile (includes role + department)
+      final profile = await ApiService.getMe(_token!);
+      _user = UserModel.fromApi(profile);
+      // Patch role/department from login response if profile doesn't have it
+      if (data['role'] != null) {
+        _user = _user!.copyWith(
+          role: data['role'] as String?,
+          department: data['department'] as String?,
+          isAdmin: data['is_admin'] as bool?,
+        );
+      }
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('user_id', user.id!);
+      await prefs.setString('auth_token', _token!);
       notifyListeners();
       return null;
     } catch (e) {
       debugPrint('Login error: $e');
+      if (e is String) return e;
       return 'Login failed. Please try again.';
     }
   }
@@ -56,41 +75,37 @@ class AuthProvider with ChangeNotifier {
     required String mobile,
   }) async {
     try {
-      final existing =
-          await DatabaseHelper.instance.getUserByEmail(email.trim());
-      if (existing != null) return 'Email already registered';
-      final user = UserModel(
+      await ApiService.register(
         email: email.trim(),
-        passwordHash: password,
+        password: password,
         fullName: fullName.trim(),
         mobile: mobile.trim(),
-        createdAt: DateTime.now().toIso8601String(),
       );
-      final id = await DatabaseHelper.instance.insertUser(user);
-      _user = user.copyWith(id: id);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('user_id', id);
-      notifyListeners();
-      return null;
+      return await login(email, password);
     } catch (e) {
       debugPrint('Register error: $e');
+      if (e is String) return e;
       return 'Registration failed. Try again.';
     }
   }
 
   Future<void> logout() async {
     _user = null;
+    _token = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('user_id');
+    await prefs.remove('auth_token');
     notifyListeners();
   }
 
   Future<void> updateProfile(
       {required String fullName, required String mobile}) async {
-    if (_user == null) return;
-    final updated = _user!.copyWith(fullName: fullName, mobile: mobile);
-    await DatabaseHelper.instance.updateUser(updated);
-    _user = updated;
-    notifyListeners();
+    if (_user == null || _token == null) return;
+    try {
+      final data = await ApiService.updateProfile(_token!, fullName, mobile);
+      _user = UserModel.fromApi(data);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Update profile error: $e');
+    }
   }
 }
