@@ -23,7 +23,7 @@ from dateutil.relativedelta import relativedelta
 from app.schemas import UserProfileResponse,UserProfileUpdate
 
 import numpy as np
-from image_predict import original_class_labels,model
+from image_predict import original_class_labels, model, department_mapping, predict_image, preprocess_image
 from predict_text import predict_department_from_text
 
 from app import models
@@ -33,9 +33,6 @@ from app.schemas import UserCreate, UserResponse, UserLogin,MapStatsResponse,Map
 from app.auth_utils import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM    
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
-
-from predict_text import predict_department_from_text
-from image_predict import predict_image, preprocess_image
 
 class UserCreateEnhanced(BaseModel):
     email: EmailStr
@@ -182,31 +179,11 @@ app.add_middleware(
     expose_headers=["*"],  
 )
 
-# Add this function to verify tokens
-MOCK_USERS = {
-    "admin@example.com": {
-        "id": 999,
-        "email": "admin@example.com",
-        "full_name": "Mock Admin",
-        "mobile_number": "0000000000",
-        "is_admin": True,
-        "role": "super_admin",
-        "department": None,
-        "password": "admin123",
-        "created_at": datetime.utcnow()
-    },
-    "user@example.com": {
-        "id": 888,
-        "email": "user@example.com",
-        "full_name": "Mock User",
-        "mobile_number": "1111111111",
-        "is_admin": False,
-        "role": "user",
-        "department": None,
-        "password": "user123",
-        "created_at": datetime.utcnow()
-    }
-}
+# Admin email list — used for super_admin access checks
+HARDCODED_ADMIN_EMAILS = [
+    'atharv@urbansim.com',
+    'siddhi@urbansim.com',
+]
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     credentials_exception = HTTPException(
@@ -222,20 +199,6 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     except JWTError:
         raise credentials_exception
     
-    # Check mock users first
-    if email in MOCK_USERS:
-        mock_data = MOCK_USERS[email]
-        class MockUser:
-            def __init__(self, data):
-                for k, v in data.items():
-                    setattr(self, k, v)
-                # Ensure role/department exist on mock users
-                if not hasattr(self, 'role'):
-                    self.role = "super_admin" if data.get("is_admin") else "user"
-                if not hasattr(self, 'department'):
-                    self.department = None
-        return MockUser(mock_data)
-
     result = await db.execute(select(User).filter(User.email == email))
     user = result.scalar_one_or_none()
     if user is None:
@@ -325,13 +288,6 @@ async def initialize_database(db: AsyncSession = Depends(get_db)):
             detail=f"Error initializing database: {str(e)}"
         )
 
-# Add these hardcoded admin emails to your seed data
-HARDCODED_ADMIN_EMAILS = [
-    'atharv@urbansim.com',
-    'siddhi@urbansim.com',
-    'admin@example.com',
-]
-
 ADMIN_PROFILES = {
     "atharv@urbansim.com": {
         "name": "Atharv Mulik",
@@ -345,12 +301,6 @@ ADMIN_PROFILES = {
         "contact": "+91 9123456780",
         "admin_id": "ADM-2024-002"
     },
-    "admin@example.com": {
-        "name": "Mock Administrator",
-        "email": "admin@example.com",
-        "contact": "+00 0000000000",
-        "admin_id": "ADM-MOCK-001"
-    }
 }
 @app.get("/api/admin/profile")
 async def get_admin_profile(email: str):
@@ -481,6 +431,134 @@ async def create_report(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+import json as _json_smart
+from pathlib import Path as _Path
+
+# Department → human-readable label mapping
+_DEPT_LABELS = {
+    "road_dept":        ("Road Issue",        "Road/pothole issue detected by AI"),
+    "water_dept":       ("Water Leakage",     "Water leakage issue detected by AI"),
+    "sanitation_dept":  ("Garbage/Sanitation","Garbage or sanitation issue detected by AI"),
+    "electricity_dept": ("Streetlight Issue", "Electrical/streetlight issue detected by AI"),
+    "other":            ("Civic Issue",       "Civic issue reported via CivicEye"),
+}
+
+@app.post("/api/reports/smart")
+async def create_smart_report(
+    image: UploadFile = File(...),
+    location_lat: float = Form(...),
+    location_long: float = Form(...),
+    location_address: Optional[str] = Form(None),
+    urgency_level: str = Form("Medium"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Smart report: upload an image + GPS location.
+    The AI model auto-detects the issue type, department, title and description.
+    """
+    # Validate by content_type OR file extension (Flutter sometimes sends
+    # content_type as application/octet-stream or leaves it None)
+    ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "bmp", "heic", "heif"}
+    ext = ""
+    if image.filename and "." in image.filename:
+        ext = image.filename.rsplit(".", 1)[-1].lower()
+
+    content_type_ok = image.content_type and image.content_type.startswith("image/")
+    extension_ok = ext in ALLOWED_EXTENSIONS
+
+    if not content_type_ok and not extension_ok:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File must be an image. Received content_type='{image.content_type}', filename='{image.filename}'"
+        )
+
+    if urgency_level not in ("Low", "Medium", "High"):
+        urgency_level = "Medium"
+
+    try:
+        # ── 1. Run image prediction ──────────────────────────────────────────
+        image_bytes = await image.read()
+        try:
+            processed = preprocess_image(image_bytes)
+            predictions = model.predict(processed)
+            class_idx = int(np.argmax(predictions[0]))
+            original_pred = original_class_labels[class_idx]
+            confidence = float(predictions[0][class_idx]) * 100
+            department = department_mapping.get(original_pred, "other")
+        except Exception as pred_err:
+            print(f"⚠️ Prediction failed, defaulting to 'other': {pred_err}")
+            department = "other"
+            confidence = 0.0
+            original_pred = "unknown"
+
+        # ── 2. Build auto title + description ───────────────────────────────
+        title, description = _DEPT_LABELS.get(department, _DEPT_LABELS["other"])
+
+        # ── 3. Save image to disk ────────────────────────────────────────────
+        upload_dir = _Path("uploads/report_images")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        import uuid as _uuid
+        file_ext = image.filename.rsplit(".", 1)[-1] if image.filename and "." in image.filename else "jpg"
+        filename = f"{_uuid.uuid4().hex}.{file_ext}"
+        file_path = upload_dir / filename
+        file_path.write_bytes(image_bytes)
+        image_url = f"/uploads/report_images/{filename}"
+
+        # ── 4. Ensure "Reported" status exists ──────────────────────────────
+        status_result = await db.execute(select(Status).where(Status.name == "Reported"))
+        reported_status = status_result.scalar_one_or_none()
+        if not reported_status:
+            reported_status = Status(name="Reported", description="Issue has been reported")
+            db.add(reported_status)
+            await db.flush()
+
+        # ── 5. Create report ─────────────────────────────────────────────────
+        db_report = Report(
+            user_name=current_user.full_name,
+            user_mobile=current_user.mobile_number,
+            user_email=current_user.email,
+            urgency_level=urgency_level,
+            title=title,
+            description=description,
+            issue_type=original_pred,
+            category=original_pred,
+            location_lat=location_lat,
+            location_long=location_long,
+            location_address=location_address,
+            status="Reported",
+            status_id=reported_status.id,
+            department=department,
+            auto_assigned=True,
+            prediction_confidence=round(confidence, 2),
+            user_id=current_user.id,
+            images=_json_smart.dumps([image_url]),
+        )
+        db.add(db_report)
+        await db.commit()
+        await db.refresh(db_report)
+
+        return {
+            "message": "Smart report created successfully",
+            "report_id": db_report.id,
+            "ai_result": {
+                "detected_issue": original_pred,
+                "department": department,
+                "confidence": round(confidence, 2),
+                "title": title,
+                "description": description,
+            },
+            "image_url": image_url,
+        }
+
+    except HTTPException:
+        raise  # re-raise validation errors as-is
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Smart report error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create report: {str(e)}")
 
 
 @app.get("/reports/{report_id}")
@@ -628,30 +706,6 @@ async def signup(user_data: UserCreateEnhanced, db: AsyncSession = Depends(get_d
 
 @app.post("/api/login")
 async def login(login_data: UserLogin, db: AsyncSession = Depends(get_db)):
-    # Check mock users first (no lockout for mock users)
-    if login_data.email in MOCK_USERS:
-        mock_user = MOCK_USERS[login_data.email]
-        if login_data.password == mock_user["password"]:
-            access_token = create_access_token(
-                data={
-                    "sub": mock_user["email"],
-                    "is_admin": mock_user["is_admin"]
-                }
-            )
-            return {
-                "access_token": access_token,
-                "token_type": "bearer",
-                "user_id": mock_user["id"],
-                "is_admin": mock_user["is_admin"],
-                "full_name": mock_user["full_name"],
-                "email": mock_user["email"],
-                "message": "Login successful (Mock Mode)"
-            }
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
-
     result = await db.execute(
         select(User).filter(User.email == login_data.email)
     )
@@ -741,6 +795,49 @@ async def read_own_reports(
     result = await db.execute(select(Report).filter(Report.user_id == current_user.id))
     user_reports = result.scalars().all()
     return user_reports
+
+# Delete user's own report
+@app.delete("/api/users/reports/{report_id}")
+async def delete_own_report(
+    report_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Allow users to delete their own reports.
+    Users can only delete reports they created.
+    """
+    # Fetch the report
+    result = await db.execute(select(Report).filter(Report.id == report_id))
+    db_report = result.scalar_one_or_none()
+    
+    if db_report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report with ID {report_id} not found"
+        )
+    
+    # Check if the report belongs to the current user
+    if db_report.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only delete your own reports"
+        )
+    
+    # Delete associated confirmations first (if any)
+    await db.execute(select(Confirmation).filter(Confirmation.report_id == report_id))
+    confirmations = await db.execute(select(Confirmation).filter(Confirmation.report_id == report_id))
+    for confirmation in confirmations.scalars().all():
+        await db.delete(confirmation)
+    
+    # Delete the report
+    await db.delete(db_report)
+    await db.commit()
+    
+    return {
+        "message": f"Report '{db_report.title}' has been successfully deleted",
+        "report_id": report_id
+    }
 
 # Get all categories
 @app.get("/categories")

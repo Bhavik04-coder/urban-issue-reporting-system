@@ -176,13 +176,13 @@ class ProfileScreen extends StatelessWidget {
                     items: [
                       // Feature 13: Theme toggle
                       _MenuItemSwitch(
-                        icon: themeProvider.isDark
+                        icon: themeProvider.isDarkMode
                             ? Icons.dark_mode_rounded
                             : Icons.light_mode_rounded,
-                        label: themeProvider.isDark
+                        label: themeProvider.isDarkMode
                             ? 'Dark Mode'
                             : 'Light Mode',
-                        value: themeProvider.isDark,
+                        value: themeProvider.isDarkMode,
                         textPrimary: textPrimary,
                         textSecondary: textSecondary,
                         onChanged: (_) => themeProvider.toggle(),

@@ -6,10 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
-import '../../core/draft_service.dart';
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/report_provider.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -19,139 +17,131 @@ class ReportScreen extends StatefulWidget {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
-  final _locationCtrl = TextEditingController();
-
-  String _category = 'Road Maintenance';
-  String _urgency = 'Medium';
   XFile? _image;
+  String _urgency = 'Medium';
   bool _submitting = false;
   bool _fetchingLocation = false;
   double _locationLat = 0.0;
   double _locationLong = 0.0;
-
-  static const _categories = [
-    'Road Maintenance',
-    'Water Supply',
-    'Sanitation',
-    'Electricity',
-    'Public Works',
-    'Other',
-  ];
+  String? _locationAddress;
 
   static const _urgencies = ['Low', 'Medium', 'High'];
-
-  static const _categoryIcons = {
-    'Road Maintenance': Icons.construction_rounded,
-    'Water Supply': Icons.water_drop_outlined,
-    'Sanitation': Icons.delete_outline_rounded,
-    'Electricity': Icons.bolt_rounded,
-    'Public Works': Icons.account_balance_outlined,
-    'Other': Icons.report_problem_outlined,
-  };
-
   static const _urgencyColors = {
     'Low': AppTheme.secondary,
     'Medium': AppTheme.warning,
     'High': AppTheme.accent,
   };
 
-  @override
-  void initState() {
-    super.initState();
-    _loadDraftIfAny();
-  }
+  static const _deptIcons = {
+    'road_dept': Icons.construction_rounded,
+    'water_dept': Icons.water_drop_outlined,
+    'sanitation_dept': Icons.delete_outline_rounded,
+    'electricity_dept': Icons.bolt_rounded,
+    'other': Icons.report_problem_outlined,
+  };
 
-  @override
-  void dispose() {
-    _saveDraftSync();
-    _titleCtrl.dispose();
-    _descCtrl.dispose();
-    _locationCtrl.dispose();
-    super.dispose();
-  }
+  static const _deptNames = {
+    'road_dept': 'Road Department',
+    'water_dept': 'Water Department',
+    'sanitation_dept': 'Sanitation Department',
+    'electricity_dept': 'Electricity Department',
+    'other': 'General',
+  };
 
-  // Feature 10: Draft saving
-  Future<void> _loadDraftIfAny() async {
-    final draft = await DraftService.loadDraft();
-    if (draft != null && mounted) {
-      final savedAt = draft['saved_at'] as String?;
-      if (savedAt != null) {
-        final age = DateTime.now().difference(DateTime.parse(savedAt));
-        if (age.inDays < 7) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _showDraftRestorePrompt(draft);
-          });
-        }
-      }
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final file = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+      if (file != null) setState(() => _image = file);
+    } catch (e) {
+      _showSnack('Could not pick image: $e', isError: true);
     }
   }
 
-  void _saveDraftSync() {
-    if (_titleCtrl.text.isEmpty && _descCtrl.text.isEmpty) return;
-    DraftService.saveDraft(
-      title: _titleCtrl.text,
-      description: _descCtrl.text,
-      category: _category,
-      urgency: _urgency,
-      location: _locationCtrl.text,
-      lat: _locationLat,
-      lng: _locationLong,
-    );
-  }
-
-  void _showDraftRestorePrompt(Map<String, dynamic> draft) {
-    showDialog(
+  void _showImageSourceSheet() {
+    // On web, camera is not supported — go straight to gallery
+    if (kIsWeb) {
+      _pickImage(ImageSource.gallery);
+      return;
+    }
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surfaceCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Restore Draft?',
-            style: TextStyle(color: AppTheme.textPrimary)),
-        content: const Text(
-          'You have an unsaved report draft. Would you like to restore it?',
-          style: TextStyle(color: AppTheme.textSecondary),
+      backgroundColor: AppTheme.surfaceCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.textSecondary.withAlpha(60),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('Add Photo',
+                  style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withAlpha(30),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded,
+                      color: AppTheme.primary),
+                ),
+                title: const Text('Take a Photo',
+                    style: TextStyle(color: AppTheme.textPrimary)),
+                subtitle: const Text('Use your camera',
+                    style: TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.secondary.withAlpha(30),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.photo_library_rounded,
+                      color: AppTheme.secondary),
+                ),
+                title: const Text('Choose from Gallery',
+                    style: TextStyle(color: AppTheme.textPrimary)),
+                subtitle: const Text('Pick an existing photo',
+                    style: TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              DraftService.clearDraft();
-              Navigator.pop(context);
-            },
-            child: const Text('Discard',
-                style: TextStyle(color: AppTheme.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _titleCtrl.text = draft['title'] as String? ?? '';
-                _descCtrl.text = draft['description'] as String? ?? '';
-                _locationCtrl.text = draft['location'] as String? ?? '';
-                _category =
-                    draft['category'] as String? ?? 'Road Maintenance';
-                _urgency = draft['urgency'] as String? ?? 'Medium';
-                _locationLat =
-                    (draft['lat'] as num?)?.toDouble() ?? 0.0;
-                _locationLong =
-                    (draft['lng'] as num?)?.toDouble() ?? 0.0;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Restore'),
-          ),
-        ],
       ),
     );
-  }
-
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 80);
-    if (file != null) setState(() => _image = file);
   }
 
   Future<void> _fetchLocation() async {
@@ -159,10 +149,9 @@ class _ReportScreenState extends State<ReportScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        _showSnack('Location services are disabled. Please enable them.');
+        _showSnack('Location services are disabled.');
         return;
       }
-
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -172,18 +161,15 @@ class _ReportScreenState extends State<ReportScreen> {
         }
       }
       if (permission == LocationPermission.deniedForever) {
-        _showSnack(
-            'Location permission permanently denied. Enable it in settings.');
+        _showSnack('Location permission permanently denied. Enable in settings.');
         return;
       }
-
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+          desiredAccuracy: LocationAccuracy.high);
       setState(() {
         _locationLat = pos.latitude;
         _locationLong = pos.longitude;
-        _locationCtrl.text =
+        _locationAddress =
             '${pos.latitude.toStringAsFixed(5)}, ${pos.longitude.toStringAsFixed(5)}';
       });
     } catch (e) {
@@ -194,65 +180,71 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_image == null) {
+      _showSnack('Please add a photo of the issue.', isError: true);
+      return;
+    }
+    if (_locationLat == 0.0 && _locationLong == 0.0) {
+      _showSnack('Please capture your GPS location.', isError: true);
+      return;
+    }
+
     setState(() => _submitting = true);
+    try {
+      final auth = context.read<AuthProvider>();
 
-    final auth = context.read<AuthProvider>();
-    final result = await context.read<ReportProvider>().submitReport(
-          token: auth.token!,
-          userName: auth.user!.fullName,
-          userMobile: auth.user!.mobile,
-          userEmail: auth.user!.email,
-          title: _titleCtrl.text.trim(),
-          description: _descCtrl.text.trim(),
-          category: _category,
-          urgency: _urgency,
-          locationAddress: _locationCtrl.text.trim().isEmpty
-              ? null
-              : _locationCtrl.text.trim(),
-          locationLat: _locationLat,
-          locationLong: _locationLong,
-        );
-    if (!mounted) return;
-
-    if (result == null) {
-      // Feature 2: Upload image if one was selected
-      if (_image != null) {
-        try {
-          final reportId = context.read<ReportProvider>().lastSubmittedId;
-          if (reportId != null && !kIsWeb) {
-            await ApiService.uploadReportImage(
-              auth.token!,
-              reportId,
-              File(_image!.path),
-            );
-          }
-        } catch (_) {
-          // Image upload failure is non-fatal
-        }
+      // Read image bytes — works on all platforms including web
+      final bytes = await _image!.readAsBytes();
+      if (bytes.isEmpty) {
+        throw 'Image file is empty or could not be read.';
       }
-      // Feature 10: Clear draft on successful submission
-      await DraftService.clearDraft();
+
+      // Determine filename — fallback for web where name may be empty
+      final rawName = _image!.name;
+      // On web the name might be a blob URL — extract just the filename part
+      String filename;
+      if (rawName.isEmpty) {
+        filename = 'report_image.jpg';
+      } else if (rawName.contains('/') || rawName.contains('\\')) {
+        filename = rawName.split(RegExp(r'[/\\]')).last;
+        if (filename.isEmpty) filename = 'report_image.jpg';
+      } else {
+        filename = rawName;
+      }
+      // Ensure it has an extension
+      if (!filename.contains('.')) filename = '$filename.jpg';
+
+      debugPrint('📸 Submitting image: $filename, bytes: ${bytes.length}, '
+          'lat: $_locationLat, lng: $_locationLong');
+
+      final result = await ApiService.submitSmartReport(
+        token: auth.token!,
+        imageBytes: bytes,
+        imageFilename: filename,
+        locationLat: _locationLat,
+        locationLong: _locationLong,
+        locationAddress: _locationAddress,
+        urgency: _urgency,
+      );
+
       if (!mounted) return;
       setState(() => _submitting = false);
-      _showSuccess();
-      _reset();
-    } else {
+      _showSuccess(result);
+    } catch (e) {
+      if (!mounted) return;
       setState(() => _submitting = false);
-      _showSnack(result, isError: true);
+      debugPrint('❌ Submit error: $e');
+      _showSnack(e.toString(), isError: true);
     }
   }
 
   void _reset() {
-    _titleCtrl.clear();
-    _descCtrl.clear();
-    _locationCtrl.clear();
     setState(() {
-      _category = 'Road Maintenance';
-      _urgency = 'Medium';
       _image = null;
+      _urgency = 'Medium';
       _locationLat = 0.0;
       _locationLong = 0.0;
+      _locationAddress = null;
     });
   }
 
@@ -266,15 +258,21 @@ class _ReportScreenState extends State<ReportScreen> {
     ));
   }
 
-  void _showSuccess() {
+  void _showSuccess(Map<String, dynamic> result) {
+    final ai = result['ai_result'] as Map<String, dynamic>? ?? {};
+    final dept = ai['department'] as String? ?? 'other';
+    final detectedIssue = ai['detected_issue'] as String? ?? 'issue';
+    final confidence = ai['confidence'] as num? ?? 0;
+    final title = ai['title'] as String? ?? 'Civic Issue';
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (_) => Dialog(
         backgroundColor: AppTheme.surfaceCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(28),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -294,18 +292,77 @@ class _ReportScreenState extends State<ReportScreen> {
                       color: AppTheme.textPrimary,
                       fontSize: 20,
                       fontWeight: FontWeight.w700)),
+              const SizedBox(height: 16),
+              // AI result card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withAlpha(20),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: AppTheme.primary.withAlpha(50), width: 1),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _deptIcons[dept] ?? Icons.report_problem_outlined,
+                          color: AppTheme.primary,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title,
+                                  style: const TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14)),
+                              Text(
+                                _deptNames[dept] ?? dept,
+                                style: const TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.psychology_rounded,
+                            color: AppTheme.secondary, size: 14),
+                        const SizedBox(width: 6),
+                        Text(
+                          'AI detected: $detectedIssue  •  ${confidence.toStringAsFixed(0)}% confidence',
+                          style: const TextStyle(
+                              color: AppTheme.secondary, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 8),
               const Text(
-                'Your issue has been recorded and will be reviewed by the concerned department.',
+                'The issue has been auto-assigned to the right department.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13),
+                style:
+                    TextStyle(color: AppTheme.textSecondary, fontSize: 12),
               ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _reset();
+                  },
                   child: const Text('Done'),
                 ),
               ),
@@ -318,6 +375,8 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final locationCaptured = _locationLat != 0.0;
+
     return Scaffold(
       backgroundColor: AppTheme.bgDark,
       body: CustomScrollView(
@@ -331,381 +390,376 @@ class _ReportScreenState extends State<ReportScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Category picker
-                    const _SectionLabel(label: 'Category'),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 48,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _categories.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(width: 8),
-                        itemBuilder: (_, i) {
-                          final cat = _categories[i];
-                          final selected = cat == _category;
-                          return GestureDetector(
-                            onTap: () =>
-                                setState(() => _category = cat),
-                            child: AnimatedContainer(
-                              duration: 200.ms,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? AppTheme.primary
-                                    : AppTheme.surfaceCard,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: selected
-                                      ? AppTheme.primary
-                                      : Colors.white.withAlpha(15),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _categoryIcons[cat] ??
-                                        Icons.report_problem_outlined,
-                                    size: 16,
-                                    color: selected
-                                        ? Colors.white
-                                        : AppTheme.textSecondary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(cat,
-                                      style: TextStyle(
-                                          color: selected
-                                              ? Colors.white
-                                              : AppTheme.textSecondary,
-                                          fontSize: 13,
-                                          fontWeight: selected
-                                              ? FontWeight.w600
-                                              : FontWeight.w400)),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Header hint ──────────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppTheme.primary.withAlpha(30),
+                          AppTheme.secondary.withAlpha(20),
+                        ],
                       ),
-                    ).animate(delay: 100.ms).fadeIn(),
-
-                    const SizedBox(height: 24),
-
-                    // Title
-                    const _SectionLabel(label: 'Issue Title'),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _titleCtrl,
-                      style: const TextStyle(
-                          color: AppTheme.textPrimary, fontSize: 15),
-                      decoration: const InputDecoration(
-                        hintText: 'e.g. Large pothole on Main Street',
-                        prefixIcon: Icon(Icons.title_rounded,
-                            color: AppTheme.textSecondary, size: 20),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 18),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().length < 5) {
-                          return 'Title must be at least 5 characters';
-                        }
-                        return null;
-                      },
-                    ).animate(delay: 150.ms).slideY(begin: 0.1).fadeIn(),
-
-                    const SizedBox(height: 20),
-
-                    // Description
-                    const _SectionLabel(label: 'Description'),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _descCtrl,
-                      maxLines: 4,
-                      style: const TextStyle(
-                          color: AppTheme.textPrimary, fontSize: 15),
-                      decoration: const InputDecoration(
-                        hintText: 'Describe the issue in detail...',
-                        prefixIcon: Padding(
-                          padding: EdgeInsets.only(bottom: 60),
-                          child: Icon(Icons.description_outlined,
-                              color: AppTheme.textSecondary, size: 20),
-                        ),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 18),
-                      ),
-                      validator: (v) {
-                        if (v == null || v.trim().length < 10) {
-                          return 'Please provide more detail (min 10 chars)';
-                        }
-                        return null;
-                      },
-                    ).animate(delay: 200.ms).slideY(begin: 0.1).fadeIn(),
-
-                    const SizedBox(height: 20),
-
-                    // Location
-                    const _SectionLabel(label: 'Location'),
-                    const SizedBox(height: 10),
-                    Row(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: AppTheme.primary.withAlpha(40), width: 1),
+                    ),
+                    child: const Row(
                       children: [
+                        Icon(Icons.auto_awesome_rounded,
+                            color: AppTheme.primary, size: 20),
+                        SizedBox(width: 12),
                         Expanded(
-                          child: TextFormField(
-                            controller: _locationCtrl,
-                            style: const TextStyle(
-                                color: AppTheme.textPrimary, fontSize: 15),
-                            decoration: const InputDecoration(
-                              hintText: 'Street address or tap GPS',
-                              prefixIcon: Icon(Icons.location_on_outlined,
-                                  color: AppTheme.textSecondary, size: 20),
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 18),
-                            ),
+                          child: Text(
+                            'Just snap a photo and share your location — our AI will identify the issue and route it to the right department.',
+                            style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
+                                height: 1.4),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        GestureDetector(
-                          onTap: _fetchingLocation ? null : _fetchLocation,
-                          child: AnimatedContainer(
-                            duration: 200.ms,
-                            width: 52,
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: _locationLat != 0.0
-                                  ? AppTheme.secondary.withAlpha(40)
-                                  : AppTheme.surfaceCard,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: _locationLat != 0.0
-                                    ? AppTheme.secondary
-                                    : Colors.white.withAlpha(15),
+                      ],
+                    ),
+                  ).animate().fadeIn(duration: 400.ms),
+
+                  const SizedBox(height: 28),
+
+                  // ── Step 1: Photo ────────────────────────────────────
+                  _StepLabel(
+                      step: '1',
+                      label: 'Take or Upload a Photo',
+                      done: _image != null),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: _showImageSourceSheet,
+                    child: AnimatedContainer(
+                      duration: 300.ms,
+                      height: _image != null ? 220 : 140,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceCard,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _image != null
+                              ? AppTheme.primary.withAlpha(100)
+                              : Colors.white.withAlpha(15),
+                          width: _image != null ? 2 : 1,
+                        ),
+                      ),
+                      child: _image != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(19),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  kIsWeb
+                                      ? Image.network(_image!.path,
+                                          fit: BoxFit.cover)
+                                      : Image.file(File(_image!.path),
+                                          fit: BoxFit.cover),
+                                  // Change photo button
+                                  Positioned(
+                                    bottom: 10,
+                                    right: 10,
+                                    child: GestureDetector(
+                                      onTap: _showImageSourceSheet,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withAlpha(160),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.edit_rounded,
+                                                color: Colors.white,
+                                                size: 14),
+                                            SizedBox(width: 4),
+                                            Text('Change',
+                                                style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12)),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
+                            )
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary.withAlpha(20),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                      Icons.add_a_photo_rounded,
+                                      color: AppTheme.primary,
+                                      size: 30),
+                                ),
+                                const SizedBox(height: 10),
+                                const Text('Tap to add photo',
+                                    style: TextStyle(
+                                        color: AppTheme.textPrimary,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 4),
+                                const Text('Camera or gallery',
+                                    style: TextStyle(
+                                        color: AppTheme.textSecondary,
+                                        fontSize: 12)),
+                              ],
+                            ),
+                    ),
+                  ).animate(delay: 100.ms).slideY(begin: 0.1).fadeIn(),
+
+                  const SizedBox(height: 28),
+
+                  // ── Step 2: Location ─────────────────────────────────
+                  _StepLabel(
+                      step: '2',
+                      label: 'Capture Your Location',
+                      done: locationCaptured),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: _fetchingLocation ? null : _fetchLocation,
+                    child: AnimatedContainer(
+                      duration: 250.ms,
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: locationCaptured
+                            ? AppTheme.secondary.withAlpha(20)
+                            : AppTheme.surfaceCard,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: locationCaptured
+                              ? AppTheme.secondary
+                              : Colors.white.withAlpha(15),
+                          width: locationCaptured ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: locationCaptured
+                                  ? AppTheme.secondary.withAlpha(30)
+                                  : AppTheme.primary.withAlpha(20),
+                              borderRadius: BorderRadius.circular(12),
                             ),
                             child: _fetchingLocation
-                                ? const Padding(
-                                    padding: EdgeInsets.all(14),
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2,
                                         color: AppTheme.secondary),
                                   )
                                 : Icon(
-                                    Icons.my_location_rounded,
-                                    color: _locationLat != 0.0
+                                    locationCaptured
+                                        ? Icons.location_on_rounded
+                                        : Icons.my_location_rounded,
+                                    color: locationCaptured
                                         ? AppTheme.secondary
-                                        : AppTheme.textSecondary,
+                                        : AppTheme.primary,
                                     size: 22,
                                   ),
                           ),
-                        ),
-                      ],
-                    ).animate(delay: 250.ms).slideY(begin: 0.1).fadeIn(),
-
-                    if (_locationLat != 0.0) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.check_circle_outline,
-                              size: 13, color: AppTheme.secondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            'GPS: ${_locationLat.toStringAsFixed(4)}, ${_locationLong.toStringAsFixed(4)}',
-                            style: const TextStyle(
-                                color: AppTheme.secondary, fontSize: 11),
-                          ),
-                        ],
-                      ),
-                    ],
-
-                    const SizedBox(height: 24),
-
-                    // Urgency
-                    const _SectionLabel(label: 'Urgency Level'),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: _urgencies.map((u) {
-                        final selected = u == _urgency;
-                        final color = _urgencyColors[u]!;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () => setState(() => _urgency = u),
-                            child: AnimatedContainer(
-                              duration: 200.ms,
-                              margin: EdgeInsets.only(
-                                  right: u != 'High' ? 10 : 0),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 14),
-                              decoration: BoxDecoration(
-                                color: selected
-                                    ? color.withAlpha(40)
-                                    : AppTheme.surfaceCard,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: selected
-                                      ? color
-                                      : Colors.white.withAlpha(15),
-                                  width: selected ? 2 : 1,
-                                ),
-                              ),
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    u == 'High'
-                                        ? Icons.warning_rounded
-                                        : u == 'Medium'
-                                            ? Icons.info_outline
-                                            : Icons.check_circle_outline,
-                                    color: selected
-                                        ? color
-                                        : AppTheme.textSecondary,
-                                    size: 22,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(u,
-                                      style: TextStyle(
-                                          color: selected
-                                              ? color
-                                              : AppTheme.textSecondary,
-                                          fontSize: 13,
-                                          fontWeight: selected
-                                              ? FontWeight.w700
-                                              : FontWeight.w400)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ).animate(delay: 300.ms).fadeIn(),
-
-                    const SizedBox(height: 24),
-
-                    // Image
-                    const _SectionLabel(label: 'Attach Photo (optional)'),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: AnimatedContainer(
-                        duration: 300.ms,
-                        height: _image != null ? 200 : 120,
-                        decoration: BoxDecoration(
-                          color: AppTheme.surfaceCard,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: _image != null
-                                ? AppTheme.primary.withAlpha(80)
-                                : Colors.white.withAlpha(15),
-                            width: _image != null ? 2 : 1,
-                          ),
-                        ),
-                        child: _image != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(17),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    kIsWeb
-                                        ? Image.network(_image!.path,
-                                            fit: BoxFit.cover)
-                                        : Image.file(File(_image!.path),
-                                            fit: BoxFit.cover),
-                                    Positioned(
-                                      top: 8,
-                                      right: 8,
-                                      child: GestureDetector(
-                                        onTap: () => setState(
-                                            () => _image = null),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black
-                                                .withAlpha(150),
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(Icons.close,
-                                              color: Colors.white,
-                                              size: 16),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : const Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                      Icons.add_photo_alternate_outlined,
-                                      color: AppTheme.textSecondary,
-                                      size: 32),
-                                  SizedBox(height: 8),
-                                  Text('Tap to add photo',
-                                      style: TextStyle(
-                                          color: AppTheme.textSecondary,
-                                          fontSize: 13)),
-                                ],
-                              ),
-                      ),
-                    ).animate(delay: 350.ms).fadeIn(),
-
-                    const SizedBox(height: 32),
-
-                    // Submit
-                    SizedBox(
-                      width: double.infinity,
-                      child: GestureDetector(
-                        onTap: _submitting ? null : _submit,
-                        child: Container(
-                          height: 56,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [
-                                AppTheme.primary,
-                                AppTheme.primaryDark
-                              ],
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppTheme.primary.withAlpha(80),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: _submitting
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white))
-                                : const Row(
-                                    mainAxisSize: MainAxisSize.min,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: locationCaptured
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Icon(Icons.send_rounded,
-                                          color: Colors.white, size: 20),
-                                      SizedBox(width: 10),
-                                      Text('Submit Report',
+                                      const Text('Location captured',
                                           style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight:
-                                                  FontWeight.w700)),
+                                              color: AppTheme.secondary,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14)),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${_locationLat.toStringAsFixed(5)}, ${_locationLong.toStringAsFixed(5)}',
+                                        style: const TextStyle(
+                                            color: AppTheme.textSecondary,
+                                            fontSize: 12),
+                                      ),
+                                    ],
+                                  )
+                                : const Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Tap to get GPS location',
+                                          style: TextStyle(
+                                              color: AppTheme.textPrimary,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14)),
+                                      SizedBox(height: 2),
+                                      Text('Required for report',
+                                          style: TextStyle(
+                                              color: AppTheme.textSecondary,
+                                              fontSize: 12)),
                                     ],
                                   ),
                           ),
+                          if (locationCaptured)
+                            GestureDetector(
+                              onTap: _fetchLocation,
+                              child: const Icon(Icons.refresh_rounded,
+                                  color: AppTheme.textSecondary, size: 18),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ).animate(delay: 150.ms).slideY(begin: 0.1).fadeIn(),
+
+                  const SizedBox(height: 28),
+
+                  // ── Step 3: Urgency ──────────────────────────────────
+                  _StepLabel(step: '3', label: 'Urgency Level', done: true),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: _urgencies.map((u) {
+                      final selected = u == _urgency;
+                      final color = _urgencyColors[u]!;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _urgency = u),
+                          child: AnimatedContainer(
+                            duration: 200.ms,
+                            margin:
+                                EdgeInsets.only(right: u != 'High' ? 10 : 0),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? color.withAlpha(40)
+                                  : AppTheme.surfaceCard,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: selected
+                                    ? color
+                                    : Colors.white.withAlpha(15),
+                                width: selected ? 2 : 1,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  u == 'High'
+                                      ? Icons.warning_rounded
+                                      : u == 'Medium'
+                                          ? Icons.info_outline
+                                          : Icons.check_circle_outline,
+                                  color: selected
+                                      ? color
+                                      : AppTheme.textSecondary,
+                                  size: 22,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(u,
+                                    style: TextStyle(
+                                        color: selected
+                                            ? color
+                                            : AppTheme.textSecondary,
+                                        fontSize: 13,
+                                        fontWeight: selected
+                                            ? FontWeight.w700
+                                            : FontWeight.w400)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ).animate(delay: 200.ms).fadeIn(),
+
+                  const SizedBox(height: 36),
+
+                  // ── Submit button ────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: GestureDetector(
+                      onTap: _submitting ? null : _submit,
+                      child: AnimatedContainer(
+                        duration: 200.ms,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: (_image != null && locationCaptured)
+                                ? [AppTheme.primary, AppTheme.primaryDark]
+                                : [
+                                    AppTheme.surfaceLight,
+                                    AppTheme.surfaceLight
+                                  ],
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: (_image != null && locationCaptured)
+                              ? [
+                                  BoxShadow(
+                                    color: AppTheme.primary.withAlpha(80),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  )
+                                ]
+                              : [],
+                        ),
+                        child: Center(
+                          child: _submitting
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.auto_awesome_rounded,
+                                      color: (_image != null &&
+                                              locationCaptured)
+                                          ? Colors.white
+                                          : AppTheme.textSecondary,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'Analyse & Submit',
+                                      style: TextStyle(
+                                          color: (_image != null &&
+                                                  locationCaptured)
+                                              ? Colors.white
+                                              : AppTheme.textSecondary,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
-                    ).animate(delay: 400.ms).slideY(begin: 0.3).fadeIn(),
-                  ],
-                ),
+                    ),
+                  ).animate(delay: 250.ms).slideY(begin: 0.3).fadeIn(),
+
+                  const SizedBox(height: 12),
+                  const Center(
+                    child: Text(
+                      'AI will auto-detect the issue type and assign the right department',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: AppTheme.textSecondary, fontSize: 11),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -715,16 +769,46 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
+// ── Shared widgets ─────────────────────────────────────────────────────────────
+
+class _StepLabel extends StatelessWidget {
+  final String step;
   final String label;
-  const _SectionLabel({required this.label});
+  final bool done;
+
+  const _StepLabel(
+      {required this.step, required this.label, required this.done});
 
   @override
   Widget build(BuildContext context) {
-    return Text(label,
-        style: const TextStyle(
-            color: AppTheme.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w600));
+    return Row(
+      children: [
+        AnimatedContainer(
+          duration: 300.ms,
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: done ? AppTheme.secondary : AppTheme.primary,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: done
+                ? const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 14)
+                : Text(step,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(label,
+            style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600)),
+      ],
+    );
   }
 }

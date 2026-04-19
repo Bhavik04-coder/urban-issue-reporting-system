@@ -184,47 +184,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ).animate(delay: 520.ms).fadeIn(),
 
-                const SizedBox(height: 24),
-                // Info hint
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withAlpha(20),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                        color: AppTheme.primary.withAlpha(40), width: 1),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.info_outline,
-                          color: AppTheme.primary, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: RichText(
-                          text: const TextSpan(
-                            style: TextStyle(
-                                fontSize: 12, color: AppTheme.textSecondary),
-                            children: [
-                              TextSpan(text: 'Super Admin: '),
-                              TextSpan(
-                                  text: 'admin@example.com',
-                                  style: TextStyle(
-                                      color: AppTheme.primary,
-                                      fontWeight: FontWeight.w600)),
-                              TextSpan(text: '  /  '),
-                              TextSpan(
-                                  text: 'admin123',
-                                  style: TextStyle(
-                                      color: AppTheme.primary,
-                                      fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ).animate(delay: 600.ms).fadeIn(),
-
                 const SizedBox(height: 32),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

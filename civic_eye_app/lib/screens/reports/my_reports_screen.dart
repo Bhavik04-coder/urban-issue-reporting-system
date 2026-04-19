@@ -321,6 +321,8 @@ class _ReportTile extends StatelessWidget {
           builder: (_) => ReportDetailScreen(report: report),
         ),
       ),
+      // Long press to show delete option
+      onLongPress: () => _showDeleteDialog(context),
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
@@ -352,6 +354,15 @@ class _ReportTile extends StatelessWidget {
                           color: sc,
                           fontSize: 11,
                           fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+                // Delete button
+                IconButton(
+                  icon: Icon(Icons.delete_outline_rounded,
+                      size: 20, color: AppTheme.error),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => _showDeleteDialog(context),
                 ),
               ],
             ),
@@ -407,6 +418,125 @@ class _ReportTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Report?',
+            style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700)),
+        content: Text(
+          'Are you sure you want to delete "${report.title}"? This action cannot be undone.',
+          style: TextStyle(color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel',
+                style: TextStyle(color: textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _deleteReport(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteReport(BuildContext context) async {
+    final auth = context.read<AuthProvider>();
+    final reportProvider = context.read<ReportProvider>();
+    
+    if (auth.token == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Authentication required'),
+          backgroundColor: AppTheme.error,
+        ),
+      );
+      return;
+    }
+
+    if (report.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Invalid report ID'),
+          backgroundColor: AppTheme.error,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Deleting report...'),
+            ],
+          ),
+          duration: const Duration(seconds: 30),
+        ),
+      );
+
+      // Delete the report
+      await ApiService.deleteOwnReport(report.id!, auth.token!);
+
+      // Reload reports
+      if (auth.user != null) {
+        await reportProvider.loadUserReports(
+          auth.user!.email,
+          token: auth.token,
+        );
+      }
+
+      // Hide loading and show success
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.check_circle_rounded, color: Colors.white),
+              SizedBox(width: 12),
+              Expanded(child: Text('Report deleted successfully')),
+            ],
+          ),
+          backgroundColor: AppTheme.statusResolved,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      // Hide loading and show error
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete report: ${e.toString()}'),
+          backgroundColor: AppTheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 }
 

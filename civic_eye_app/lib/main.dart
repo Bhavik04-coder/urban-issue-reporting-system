@@ -38,7 +38,7 @@ class CivicEyeApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
-          themeMode: themeProvider.mode,
+          themeMode: themeProvider.themeMode,
           home: const SplashScreen(),
         ),
       ),

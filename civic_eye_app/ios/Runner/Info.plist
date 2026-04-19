@@ -45,5 +45,21 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Camera and photo library permissions for image_picker -->
+	<key>NSCameraUsageDescription</key>
+	<string>CivicEye needs camera access to take photos of civic issues for reporting.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CivicEye needs access to your photo library to attach images to issue reports.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>CivicEye needs permission to save photos to your library.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CivicEye needs microphone access when recording video of civic issues.</string>
+
+	<!-- Location permissions for geolocator -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>CivicEye needs your location to attach GPS coordinates to issue reports.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>CivicEye needs your location to attach GPS coordinates to issue reports.</string>
 </dict>
 </plist>
