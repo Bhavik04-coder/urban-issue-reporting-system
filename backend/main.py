@@ -289,17 +289,11 @@ async def initialize_database(db: AsyncSession = Depends(get_db)):
         )
 
 ADMIN_PROFILES = {
-    "atharv@urbansim.com": {
-        "name": "Atharv Mulik",
-        "email": "atharv@urbansim.com",
-        "contact": "+91 9876543210",
+    "admin@example.com": {
+        "name": "Admin",
+        "email": "admin@example.com",
+        "contact": "",
         "admin_id": "ADM-2024-001"
-    },
-    "siddhi@urbansim.com": {
-        "name": "Siddhi Naik",
-        "email": "siddhi@urbansim.com",
-        "contact": "+91 9123456780",
-        "admin_id": "ADM-2024-002"
     },
 }
 @app.get("/api/admin/profile")

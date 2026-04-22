@@ -46,10 +46,8 @@ flutter run -d chrome
 
 ### Super Admins
 
-| Name         | Email                | Password    | Admin ID     |
-|--------------|----------------------|-------------|--------------|
-| Atharv Mulik | atharv@urbansim.com  | Admin@1234  | ADM-2024-001 |
-| Siddhi Naik  | siddhi@urbansim.com  | Admin@1234  | ADM-2024-002 |
+| Email    | admin@example.com |
+| Password | Admin@1234        |
 
 ### Department Admins
 
