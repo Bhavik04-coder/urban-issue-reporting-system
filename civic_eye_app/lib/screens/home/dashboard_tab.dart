@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/report_provider.dart';
 import '../../models/report_model.dart';
+import '../../widgets/notification_bell.dart';
 import '../report/report_screen.dart';
 import '../reports/my_reports_screen.dart';
 
@@ -86,6 +87,8 @@ class _DashboardTabState extends State<DashboardTab> {
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800)),
                         const Spacer(),
+                        const NotificationBell(),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),

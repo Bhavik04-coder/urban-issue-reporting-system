@@ -247,6 +247,7 @@ class DepartmentAssign(BaseModel):
 class ResolveIssue(BaseModel):
     resolution_notes: str
     resolved_by: str
+    completed_work_image: Optional[str] = None
 
 class AdminReportsResponse(BaseModel):
     reports: List[ReportResponse]

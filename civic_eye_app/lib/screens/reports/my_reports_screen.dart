@@ -7,6 +7,8 @@ import '../../core/theme.dart';
 import '../../models/report_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/report_provider.dart';
+import '../../widgets/notification_bell.dart';
+import '../../widgets/report_image_viewer.dart';
 import 'report_detail_screen.dart';
 
 class MyReportsScreen extends StatefulWidget {
@@ -102,6 +104,7 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
             automaticallyImplyLeading: false,
             title: Text('My Reports',
                 style: TextStyle(color: textPrimary)),
+            actions: const [NotificationBell()],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(130),
               child: Column(
@@ -412,6 +415,14 @@ class _ReportTile extends StatelessWidget {
                             color: textSecondary, fontSize: 12)),
                   ),
                 ],
+              ),
+            ],
+            // Show images if available
+            if (report.images.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ReportImageStrip(
+                images: report.images,
+                baseUrl: ApiService.baseUrl,
               ),
             ],
           ],

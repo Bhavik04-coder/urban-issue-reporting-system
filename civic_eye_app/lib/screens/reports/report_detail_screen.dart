@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/api_service.dart';
 import '../../core/theme.dart';
 import '../../models/report_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/notification_bell.dart';
+import '../../widgets/report_image_viewer.dart';
 
 class ReportDetailScreen extends StatefulWidget {
   final ReportModel report;
@@ -115,6 +118,7 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          const NotificationBell(),
           // Feature 8: Confirm / Upvote button
           _confirmLoading
               ? const Padding(
@@ -172,6 +176,17 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
                   ).animate(delay: 100.ms).slideY(begin: 0.1).fadeIn(),
 
                   const SizedBox(height: 16),
+
+                  // ── Images ────────────────────────────────────────
+                  if (widget.report.images.isNotEmpty)
+                    _ImagesCard(
+                      images: widget.report.images,
+                      cardColor: cardColor,
+                      textPrimary: textPrimary,
+                    ).animate(delay: 150.ms).slideY(begin: 0.1).fadeIn(),
+
+                  if (widget.report.images.isNotEmpty)
+                    const SizedBox(height: 16),
 
                   // ── Location mini-map placeholder ─────────────────
                   if ((widget.report.latitude ?? 0) != 0 ||
@@ -325,6 +340,14 @@ class _DetailsCard extends StatelessWidget {
               textPrimary,
               textSecondary,
             ),
+          if (report.priority != 'Normal')
+            _Row(
+              Icons.flag_rounded,
+              'Priority',
+              report.priority,
+              textPrimary,
+              textSecondary,
+            ),
         ],
       ),
     );
@@ -365,6 +388,54 @@ class _Row extends StatelessWidget {
   }
 }
 
+// ── Images Card ───────────────────────────────────────────────────────────────
+
+class _ImagesCard extends StatelessWidget {
+  final List<String> images;
+  final Color cardColor;
+  final Color textPrimary;
+
+  const _ImagesCard({
+    required this.images,
+    required this.cardColor,
+    required this.textPrimary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withAlpha(10)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.photo_library_rounded,
+                  color: AppTheme.primary, size: 18),
+              const SizedBox(width: 8),
+              Text('Photos (${images.length})',
+                  style: TextStyle(
+                      color: textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ReportImageStrip(
+            images: images,
+            baseUrl: ApiService.baseUrl,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Location Card ─────────────────────────────────────────────────────────────
 
 class _LocationCard extends StatelessWidget {
@@ -380,6 +451,15 @@ class _LocationCard extends StatelessWidget {
     required this.textPrimary,
     required this.textSecondary,
   });
+
+  Future<void> _openInMaps() async {
+    // Try Google Maps app first, fall back to browser
+    final googleMapsUrl =
+        Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    if (await canLaunchUrl(googleMapsUrl)) {
+      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -403,30 +483,94 @@ class _LocationCard extends StatelessWidget {
                       color: textPrimary,
                       fontSize: 15,
                       fontWeight: FontWeight.w700)),
+              const Spacer(),
+              GestureDetector(
+                onTap: _openInMaps,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withAlpha(25),
+                    borderRadius: BorderRadius.circular(20),
+                    border:
+                        Border.all(color: AppTheme.primary.withAlpha(60)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.open_in_new_rounded,
+                          color: AppTheme.primary, size: 13),
+                      SizedBox(width: 4),
+                      Text('Open in Maps',
+                          style: TextStyle(
+                              color: AppTheme.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          // Mini map placeholder — shows coordinates and address
-          Container(
-            height: 120,
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withAlpha(15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.primary.withAlpha(40)),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+          // Tappable map preview card
+          GestureDetector(
+            onTap: _openInMaps,
+            child: Container(
+              height: 130,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withAlpha(15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.primary.withAlpha(40)),
+              ),
+              child: Stack(
                 children: [
-                  const Icon(Icons.map_outlined,
-                      color: AppTheme.primary, size: 32),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
-                    style: TextStyle(
-                        color: textSecondary,
-                        fontSize: 12,
-                        fontFamily: 'monospace'),
+                  // Background grid pattern to suggest a map
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CustomPaint(
+                      size: const Size(double.infinity, 130),
+                      painter: _MapGridPainter(),
+                    ),
+                  ),
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accent,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.accent.withAlpha(100),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(Icons.location_on_rounded,
+                              color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
+                          style: TextStyle(
+                              color: textSecondary,
+                              fontSize: 11,
+                              fontFamily: 'monospace'),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tap to view on Google Maps',
+                          style: TextStyle(
+                              color: AppTheme.primary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -452,6 +596,27 @@ class _LocationCard extends StatelessWidget {
   }
 }
 
+/// Simple grid painter to give the map card a map-like feel
+class _MapGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = AppTheme.primary.withAlpha(12)
+      ..strokeWidth = 1;
+
+    const step = 20.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 // ── Timeline Stepper ──────────────────────────────────────────────────────────
 
 class _TimelineStepper extends StatelessWidget {
@@ -465,6 +630,7 @@ class _TimelineStepper extends StatelessWidget {
     required this.textSecondary,
   });
 
+  // Steps in order — Rejected is handled separately as an alternate end state
   static const _steps = [
     'Submitted',
     'Assigned',
@@ -474,17 +640,20 @@ class _TimelineStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final completedEvents = events
-        .where((e) =>
-            (e as Map<String, dynamic>)['status'] == 'completed')
-        .map((e) => (e as Map<String, dynamic>)['event'] as String)
-        .toSet();
+    // Build a map of event name → event data for quick lookup
+    final eventMap = <String, Map<String, dynamic>>{};
+    for (final e in events) {
+      final ev = e as Map<String, dynamic>;
+      final name = ev['event'] as String? ?? '';
+      if (name.isNotEmpty) eventMap[name] = ev;
+    }
 
-    final inProgressEvents = events
-        .where((e) =>
-            (e as Map<String, dynamic>)['status'] == 'in_progress')
-        .map((e) => (e as Map<String, dynamic>)['event'] as String)
-        .toSet();
+    final hasRejected = eventMap.containsKey('Rejected');
+
+    // Determine which steps to show: if rejected, replace Resolved with Rejected
+    final displaySteps = hasRejected
+        ? ['Submitted', 'Assigned', 'Rejected']
+        : _steps;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -509,18 +678,25 @@ class _TimelineStepper extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          ..._steps.asMap().entries.map((entry) {
+          ...displaySteps.asMap().entries.map((entry) {
             final i = entry.key;
             final step = entry.value;
-            final isCompleted = completedEvents.contains(step);
-            final isInProgress = inProgressEvents.contains(step);
-            final isLast = i == _steps.length - 1;
+            final ev = eventMap[step];
+            final evStatus = ev?['status'] as String? ?? '';
+            final isCompleted = evStatus == 'completed';
+            final isInProgress = evStatus == 'in_progress';
+            final isLast = i == displaySteps.length - 1;
+            final isRejectedStep = step == 'Rejected';
 
             Color dotColor;
             IconData dotIcon;
             if (isCompleted) {
-              dotColor = AppTheme.statusResolved;
-              dotIcon = Icons.check_circle_rounded;
+              dotColor = isRejectedStep
+                  ? AppTheme.statusRejected
+                  : AppTheme.statusResolved;
+              dotIcon = isRejectedStep
+                  ? Icons.cancel_rounded
+                  : Icons.check_circle_rounded;
             } else if (isInProgress) {
               dotColor = AppTheme.statusInProgress;
               dotIcon = Icons.pending_rounded;
@@ -529,21 +705,18 @@ class _TimelineStepper extends StatelessWidget {
               dotIcon = Icons.radio_button_unchecked_rounded;
             }
 
-            // Find timestamp for this step
+            // Format timestamp
             String? timestamp;
-            for (final e in events) {
-              final ev = e as Map<String, dynamic>;
-              if (ev['event'] == step) {
-                final ts = ev['timestamp'] as String?;
-                if (ts != null) {
-                  final dt = DateTime.tryParse(ts);
-                  if (dt != null) {
-                    timestamp = DateFormat('MMM d, h:mm a').format(dt);
-                  }
-                }
-                break;
+            final ts = ev?['timestamp'] as String?;
+            if (ts != null) {
+              final dt = DateTime.tryParse(ts);
+              if (dt != null) {
+                timestamp = DateFormat('MMM d, h:mm a').format(dt.toLocal());
               }
             }
+
+            // Progress note from dept admin
+            final note = ev?['description'] as String?;
 
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -554,9 +727,11 @@ class _TimelineStepper extends StatelessWidget {
                     if (!isLast)
                       Container(
                         width: 2,
-                        height: 40,
+                        height: note != null && note.isNotEmpty ? 52 : 40,
                         color: isCompleted
-                            ? AppTheme.statusResolved.withAlpha(80)
+                            ? (isRejectedStep
+                                ? AppTheme.statusRejected.withAlpha(60)
+                                : AppTheme.statusResolved.withAlpha(80))
                             : textSecondary.withAlpha(30),
                       ),
                   ],
@@ -577,10 +752,25 @@ class _TimelineStepper extends StatelessWidget {
                                 fontWeight: isCompleted || isInProgress
                                     ? FontWeight.w600
                                     : FontWeight.w400)),
+                        if (note != null && note.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(note,
+                                style: TextStyle(
+                                    color: isCompleted || isInProgress
+                                        ? textSecondary
+                                        : textSecondary.withAlpha(120),
+                                    fontSize: 12,
+                                    height: 1.4)),
+                          ),
                         if (timestamp != null)
-                          Text(timestamp,
-                              style: TextStyle(
-                                  color: textSecondary, fontSize: 11)),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(timestamp,
+                                style: TextStyle(
+                                    color: textSecondary.withAlpha(160),
+                                    fontSize: 11)),
+                          ),
                       ],
                     ),
                   ),

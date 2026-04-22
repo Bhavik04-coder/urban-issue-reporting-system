@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/report_provider.dart';
 import '../../models/report_model.dart';
+import '../../widgets/notification_bell.dart';
 
 class AdminDashboardTab extends StatefulWidget {
   const AdminDashboardTab({super.key});
@@ -73,23 +74,26 @@ class _AdminDashboardTabState extends State<AdminDashboardTab> {
                               color: Colors.white, size: 22),
                         ),
                         const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('CivicEye Admin',
-                                style: TextStyle(
-                                    color: AppTheme.textPrimary,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800)),
-                            Text(
-                              DateFormat('EEEE, MMM d')
-                                  .format(DateTime.now()),
-                              style: const TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 12),
-                            ),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('CivicEye Admin',
+                                  style: TextStyle(
+                                      color: AppTheme.textPrimary,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800)),
+                              Text(
+                                DateFormat('EEEE, MMM d')
+                                    .format(DateTime.now()),
+                                style: const TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12),
+                              ),
+                            ],
+                          ),
                         ),
+                        const NotificationBell(),
                       ],
                     ),
                     const SizedBox(height: 24),

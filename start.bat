@@ -15,6 +15,12 @@ if not exist "%~dp0backend\venv" (
     call venv\Scripts\activate
     pip install -r requirements.txt
     pip install argon2-cffi
+    echo [SETUP] Seeding admin accounts...
+    python seed_admins.py
+    python seed_dept_admins.py
+    echo [SETUP] Running database migrations...
+    python add_completed_work_image_column.py
+    python migrate_db.py
     cd /d "%~dp0"
     echo [SETUP] Backend setup complete!
     echo.
@@ -23,6 +29,9 @@ if not exist "%~dp0backend\venv" (
     cd /d "%~dp0backend"
     call venv\Scripts\activate
     pip install -r requirements.txt --quiet
+    echo [SETUP] Running database migrations...
+    python add_completed_work_image_column.py
+    python migrate_db.py
     cd /d "%~dp0"
     echo.
 )

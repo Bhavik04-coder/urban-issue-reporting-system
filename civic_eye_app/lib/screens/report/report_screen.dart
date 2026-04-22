@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -18,6 +17,7 @@ class ReportScreen extends StatefulWidget {
 
 class _ReportScreenState extends State<ReportScreen> {
   XFile? _image;
+  Uint8List? _imageBytes; // cached bytes — works on web + mobile
   String _urgency = 'Medium';
   bool _submitting = false;
   bool _fetchingLocation = false;
@@ -57,7 +57,13 @@ class _ReportScreenState extends State<ReportScreen> {
         maxWidth: 1920,
         maxHeight: 1920,
       );
-      if (file != null) setState(() => _image = file);
+      if (file != null) {
+        final bytes = await file.readAsBytes();
+        setState(() {
+          _image = file;
+          _imageBytes = bytes;
+        });
+      }
     } catch (e) {
       _showSnack('Could not pick image: $e', isError: true);
     }
@@ -241,6 +247,7 @@ class _ReportScreenState extends State<ReportScreen> {
   void _reset() {
     setState(() {
       _image = null;
+      _imageBytes = null;
       _urgency = 'Medium';
       _locationLat = 0.0;
       _locationLong = 0.0;
@@ -454,10 +461,10 @@ class _ReportScreenState extends State<ReportScreen> {
                               child: Stack(
                                 fit: StackFit.expand,
                                 children: [
-                                  kIsWeb
-                                      ? Image.network(_image!.path,
+                                  _imageBytes != null
+                                      ? Image.memory(_imageBytes!,
                                           fit: BoxFit.cover)
-                                      : Image.file(File(_image!.path),
+                                      : Image.network(_image!.path,
                                           fit: BoxFit.cover),
                                   // Change photo button
                                   Positioned(

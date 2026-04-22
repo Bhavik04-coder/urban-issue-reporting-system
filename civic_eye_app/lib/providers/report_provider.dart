@@ -41,7 +41,18 @@ class ReportProvider with ChangeNotifier {
   Future<void> loadAllReports({String? token}) async {
     _setLoading(true);
     try {
-      final raw = await ApiService.getAllReports(token: token);
+      List<dynamic> raw;
+      if (token != null) {
+        // Use the new full endpoint that includes images + priority
+        try {
+          raw = await ApiService.getAllReportsFull(token);
+        } catch (_) {
+          // Fallback to old endpoint
+          raw = await ApiService.getAllReports(token: token);
+        }
+      } else {
+        raw = await ApiService.getAllReports(token: token);
+      }
       _reports = raw
           .map((e) => ReportModel.fromApi(e as Map<String, dynamic>))
           .toList();
@@ -112,6 +123,22 @@ class ReportProvider with ChangeNotifier {
       return null;
     } catch (e) {
       debugPrint('updateStatus error: $e');
+      return e.toString();
+    }
+  }
+
+  Future<String?> updatePriority(
+      int reportId, String newPriority, String token) async {
+    try {
+      await ApiService.updateReportPriority(token, reportId, newPriority);
+      final idx = _reports.indexWhere((r) => r.id == reportId);
+      if (idx != -1) {
+        _reports[idx] = _reports[idx].copyWith(priority: newPriority);
+        notifyListeners();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('updatePriority error: $e');
       return e.toString();
     }
   }

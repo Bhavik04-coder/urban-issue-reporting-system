@@ -5,11 +5,14 @@ class ReportModel {
   final String category;
   final String urgency;
   final String status;
+  final String priority; // Normal | High | Critical | Urgent
   final String? department;
   final String? locationAddress;
   final double? latitude;
   final double? longitude;
   final String? imagePath;
+  final List<String> images; // all uploaded images
+  final List<String> completedWorkImages; // dept admin's completion proof photos
   final String? aiLabel;
   final double? aiConfidence;
   final String createdAt;
@@ -18,6 +21,7 @@ class ReportModel {
   final String? userName;
   final String? userMobile;
   final String? userEmail;
+  final int? userId;
 
   ReportModel({
     this.id,
@@ -26,11 +30,14 @@ class ReportModel {
     required this.category,
     required this.urgency,
     this.status = 'Reported',
+    this.priority = 'Normal',
     this.department,
     this.locationAddress,
     this.latitude,
     this.longitude,
     this.imagePath,
+    this.images = const [],
+    this.completedWorkImages = const [],
     this.aiLabel,
     this.aiConfidence,
     required this.createdAt,
@@ -38,6 +45,7 @@ class ReportModel {
     this.userName,
     this.userMobile,
     this.userEmail,
+    this.userId,
   });
 
   factory ReportModel.fromApi(Map<String, dynamic> m) {
@@ -46,6 +54,9 @@ class ReportModel {
 
     // status string
     final status = (m['status'] ?? 'Reported') as String;
+
+    // priority
+    final priority = (m['priority'] ?? 'Normal') as String;
 
     // The /api/users/reports/filtered endpoint returns a 'category' string
     // directly (e.g. "General", "Road Maintenance").
@@ -61,6 +72,24 @@ class ReportModel {
 
     final dept = (m['department'] ?? 'other') as String;
 
+    // Parse images list
+    List<String> imagesList = [];
+    final rawImages = m['images'];
+    if (rawImages is List) {
+      imagesList = rawImages.map((e) => e.toString()).toList();
+    } else if (rawImages is String && rawImages.isNotEmpty) {
+      imagesList = [rawImages];
+    }
+
+    // Parse completed work images list
+    List<String> completedWorkImagesList = [];
+    final rawCompletedImages = m['completed_work_images'];
+    if (rawCompletedImages is List) {
+      completedWorkImagesList = rawCompletedImages.map((e) => e.toString()).toList();
+    } else if (rawCompletedImages is String && rawCompletedImages.isNotEmpty) {
+      completedWorkImagesList = [rawCompletedImages];
+    }
+
     // created_at may be an ISO string or a formatted date string like "16 Apr. 10:30 AM"
     final rawCreated = m['created_at'] ?? m['date'] ?? DateTime.now().toIso8601String();
     final rawUpdated = m['updated_at'] ?? rawCreated;
@@ -72,10 +101,13 @@ class ReportModel {
       category: category,
       urgency: urgency,
       status: status,
+      priority: priority,
       department: dept,
       locationAddress: m['location_address'] as String?,
       latitude: (m['location_lat'] as num?)?.toDouble(),
       longitude: (m['location_long'] as num?)?.toDouble(),
+      images: imagesList,
+      completedWorkImages: completedWorkImagesList,
       aiLabel: m['ai_label'] as String?,
       aiConfidence: (m['prediction_confidence'] as num?)?.toDouble(),
       createdAt: rawCreated.toString(),
@@ -83,11 +115,12 @@ class ReportModel {
       userName: m['user_name'] as String?,
       userMobile: m['user_mobile'] as String?,
       userEmail: m['user_email'] as String?,
+      userId: m['user_id'] as int?,
     );
   }
 
   ReportModel copyWith(
-          {String? status, String? department, String? updatedAt}) =>
+          {String? status, String? priority, String? department, String? updatedAt}) =>
       ReportModel(
         id: id,
         title: title,
@@ -95,11 +128,14 @@ class ReportModel {
         category: category,
         urgency: urgency,
         status: status ?? this.status,
+        priority: priority ?? this.priority,
         department: department ?? this.department,
         locationAddress: locationAddress,
         latitude: latitude,
         longitude: longitude,
         imagePath: imagePath,
+        images: images,
+        completedWorkImages: completedWorkImages,
         aiLabel: aiLabel,
         aiConfidence: aiConfidence,
         createdAt: createdAt,
@@ -107,6 +143,7 @@ class ReportModel {
         userName: userName,
         userMobile: userMobile,
         userEmail: userEmail,
+        userId: userId,
       );
 
   static String _deptToCategory(String dept) {

@@ -360,17 +360,29 @@ async def read_reports(
 ):
     result = await db.execute(select(Report).order_by(Report.created_at.desc()).offset(skip).limit(limit))
     reports = result.scalars().all()
+    import json as _j_list
+    def _parse_images(raw):
+        if not raw:
+            return []
+        try:
+            parsed = _j_list.loads(raw)
+            return parsed if isinstance(parsed, list) else [parsed]
+        except Exception:
+            return [raw]
+
     return [
         {
             "id": r.id,
             "title": r.title,
             "description": r.description,
             "urgency_level": r.urgency_level,
+            "priority": getattr(r, "priority", "Normal") or "Normal",
             "status": r.status or "Reported",
             "department": r.department or "other",
             "location_lat": r.location_lat,
             "location_long": r.location_long,
             "location_address": r.location_address,
+            "images": _parse_images(r.images),
             "ai_label": r.ai_label if hasattr(r, 'ai_label') else None,
             "prediction_confidence": r.prediction_confidence,
             "created_at": r.created_at.isoformat() if r.created_at else None,
@@ -378,6 +390,7 @@ async def read_reports(
             "user_name": r.user_name,
             "user_mobile": r.user_mobile,
             "user_email": r.user_email,
+            "user_id": r.user_id,
         }
         for r in reports
     ]
@@ -624,6 +637,10 @@ async def update_report_status(
 
     await db.commit()
     await db.refresh(db_report)
+
+    # Notify report owner
+    await _create_status_notification(db, db_report, new_status)
+    await db.commit()
 
     return {
         "message": f"Report {report_id} status updated to {new_status}",
@@ -1345,42 +1362,81 @@ async def get_report_timeline(
         created_at = report.created_at if report.created_at else datetime.utcnow()
         updated_at = report.updated_at if report.updated_at else created_at
         
+        # Parse real status history recorded by dept admin
+        import json as _json_tl
+        try:
+            status_history = _json_tl.loads(report.status_history) if report.status_history else []
+            if not isinstance(status_history, list):
+                status_history = []
+        except Exception:
+            status_history = []
+
+        # Build a lookup: status_name -> {timestamp, note} from real history
+        history_map: dict = {}
+        for entry in status_history:
+            s = entry.get("status", "")
+            if s and s not in history_map:
+                history_map[s] = {
+                    "timestamp": entry.get("timestamp"),
+                    "note": entry.get("note", ""),
+                }
+
+        # Helper: get timestamp for a status, fall back to offset from created_at
+        def _ts(status_name: str, fallback_offset_hours: int) -> str:
+            if status_name in history_map and history_map[status_name]["timestamp"]:
+                return history_map[status_name]["timestamp"]
+            return (created_at + timedelta(hours=fallback_offset_hours)).isoformat()
+
+        def _note(status_name: str, default: str) -> str:
+            if status_name in history_map and history_map[status_name]["note"]:
+                return history_map[status_name]["note"]
+            return default
+
         # Build timeline events
         timeline_events = []
         
-        # Event 1: Complaint Submitted
+        # Event 1: Complaint Submitted — always present
         timeline_events.append({
             "event": "Submitted",
-            "description": "Complaint submitted",
+            "description": "Complaint submitted by citizen",
             "timestamp": created_at.isoformat(),
             "status": "completed"
         })
         
-        # Event 2: Assigned to Department
-        if report_status and report_status.name in ["In Progress", "Resolved", "Closed"]:
+        # Event 2: Assigned to Department — when status moved past "Reported"
+        current_status = report.status or ""
+        if current_status in ["In Progress", "Resolved", "Closed", "Rejected"]:
             timeline_events.append({
                 "event": "Assigned",
-                "description": "Assigned to department",
-                "timestamp": (created_at + timedelta(hours=2)).isoformat(),
+                "description": _note("Assigned", f"Assigned to {report.department or 'department'}"),
+                "timestamp": _ts("Assigned", 2),
                 "status": "completed"
             })
 
-        
         # Event 3: Work in Progress
-        if report_status and report_status.name in ["In Progress", "Resolved", "Closed"]:
+        if current_status in ["In Progress", "Resolved", "Closed"]:
             timeline_events.append({
                 "event": "In Progress",
-                "description": "Work in progress",
-                "timestamp": (created_at + timedelta(hours=4)).isoformat(),
-                "status": "completed" if report_status.name in ["Resolved", "Closed"] else "in_progress"
+                "description": _note("In Progress", "Department team is working on this issue"),
+                "timestamp": _ts("In Progress", 4),
+                "status": "completed" if current_status in ["Resolved", "Closed"] else "in_progress"
             })
 
-        
-        if report_status and report_status.name == "Resolved":
+        # Event 4: Resolved
+        if current_status == "Resolved":
             timeline_events.append({
                 "event": "Resolved",
-                "description": "Issue resolved successfully",
-                "timestamp": updated_at.isoformat(),
+                "description": _note("Resolved", "Issue resolved successfully by the department"),
+                "timestamp": _ts("Resolved", 0) if "Resolved" in history_map else updated_at.isoformat(),
+                "status": "completed"
+            })
+
+        # Event 5: Rejected (if applicable)
+        if current_status == "Rejected":
+            timeline_events.append({
+                "event": "Rejected",
+                "description": _note("Rejected", "Report reviewed and rejected by the department"),
+                "timestamp": _ts("Rejected", 0) if "Rejected" in history_map else updated_at.isoformat(),
                 "status": "completed"
             })
 
@@ -1389,6 +1445,17 @@ async def get_report_timeline(
         timeline_events.sort(key=lambda x: x["timestamp"])
         
         # Prepare response data
+        # Map internal dept key to human-readable name
+        _dept_display = {
+            "road_dept": "Road Department",
+            "water_dept": "Water Department",
+            "sanitation_dept": "Sanitation Department",
+            "electricity_dept": "Electricity Department",
+            "other": "General Department",
+        }
+        dept_key = report.department or "other"
+        dept_display = _dept_display.get(dept_key, dept_key.replace("_", " ").title())
+
         response_data = {
             "complaint_details": {
                 "id": report.id,
@@ -1397,9 +1464,9 @@ async def get_report_timeline(
                 "description": report.description or "No description",
                 "submitted_on": created_at.strftime("%d %b. %I:%M %p"),
                 "category": category.name if category else "General",
-                "department": "Public Works Department",
+                "department": dept_display,
                 "urgency_level": report.urgency_level or "medium",
-                "status": report_status.name if report_status else "submitted",
+                "status": report.status or "Reported",
                 "location_address": report.location_address,
                 "location_lat": report.location_lat,
                 "location_long": report.location_long,
@@ -3534,4 +3601,489 @@ async def create_admin_user(
         "user_id": new_admin.id,
         "role": new_admin.role,
         "department": new_admin.department,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PRIORITY MANAGEMENT — Super Admin only
+# ═══════════════════════════════════════════════════════════════════════════════
+
+VALID_PRIORITIES = ["Normal", "High", "Critical", "Urgent"]
+
+class PriorityUpdateRequest(BaseModel):
+    priority: str
+
+    @field_validator("priority")
+    def validate_priority(cls, v):
+        if v not in VALID_PRIORITIES:
+            raise ValueError(f"priority must be one of: {', '.join(VALID_PRIORITIES)}")
+        return v
+
+
+@app.patch("/api/super-admin/reports/{report_id}/priority")
+async def update_report_priority(
+    report_id: int,
+    body: PriorityUpdateRequest,
+    current_user: User = Depends(get_current_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Super admin sets/changes the priority of any report.
+    Sends an urgent notification when priority is Critical or Urgent.
+    """
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    old_priority = getattr(report, "priority", "Normal") or "Normal"
+    report.priority = body.priority
+    await db.commit()
+    await db.refresh(report)
+
+    # Create notification for the report owner (if known)
+    notif_type = "priority_change"
+    notif_title = f"Priority Updated: {report.title}"
+    notif_msg = (
+        f"Your report #{report_id:05d} priority has been changed from "
+        f"{old_priority} → {body.priority}."
+    )
+    if body.priority in ("Critical", "Urgent"):
+        notif_type = "urgent"
+        notif_msg += " ⚠️ This issue requires URGENT attention!"
+
+    # Notify report owner
+    if report.user_id:
+        notif = models.Notification(
+            user_id=report.user_id,
+            report_id=report_id,
+            title=notif_title,
+            message=notif_msg,
+            notif_type=notif_type,
+        )
+        db.add(notif)
+
+    # Also notify all dept admins of the relevant department
+    dept_admins_result = await db.execute(
+        select(User).where(User.role == ROLE_DEPT_ADMIN, User.department == report.department)
+    )
+    for da in dept_admins_result.scalars().all():
+        db.add(models.Notification(
+            user_id=da.id,
+            report_id=report_id,
+            title=f"⚠️ Priority Changed — {report.title}",
+            message=f"Report #{report_id:05d} in your department has been marked {body.priority}. Please act immediately.",
+            notif_type=notif_type,
+        ))
+
+    await db.commit()
+
+    return {
+        "message": f"Priority updated to {body.priority}",
+        "report_id": report_id,
+        "priority": body.priority,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NOTIFICATIONS — in-app notification system
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/notifications")
+async def get_notifications(
+    unread_only: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get notifications for the current user."""
+    stmt = (
+        select(models.Notification)
+        .where(models.Notification.user_id == current_user.id)
+        .order_by(models.Notification.created_at.desc())
+        .limit(50)
+    )
+    if unread_only:
+        stmt = stmt.where(models.Notification.is_read == False)
+    result = await db.execute(stmt)
+    notifs = result.scalars().all()
+
+    return {
+        "notifications": [
+            {
+                "id": n.id,
+                "report_id": n.report_id,
+                "title": n.title,
+                "message": n.message,
+                "type": n.notif_type,
+                "is_read": n.is_read,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in notifs
+        ],
+        "unread_count": sum(1 for n in notifs if not n.is_read),
+    }
+
+
+@app.patch("/api/notifications/{notif_id}/read")
+async def mark_notification_read(
+    notif_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark a single notification as read."""
+    result = await db.execute(
+        select(models.Notification).where(
+            models.Notification.id == notif_id,
+            models.Notification.user_id == current_user.id,
+        )
+    )
+    notif = result.scalar_one_or_none()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notif.is_read = True
+    await db.commit()
+    return {"message": "Marked as read"}
+
+
+@app.patch("/api/notifications/read-all")
+async def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark all notifications as read for the current user."""
+    result = await db.execute(
+        select(models.Notification).where(
+            models.Notification.user_id == current_user.id,
+            models.Notification.is_read == False,
+        )
+    )
+    for n in result.scalars().all():
+        n.is_read = True
+    await db.commit()
+    return {"message": "All notifications marked as read"}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# DEPT ADMIN — department-scoped report management
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _format_report_full(r: Report) -> dict:
+    """Serialize a Report with all fields including images and location."""
+    images_list: list = []
+    if r.images:
+        try:
+            import json as _j
+            raw = _j.loads(r.images)
+            images_list = raw if isinstance(raw, list) else [raw]
+        except Exception:
+            images_list = [r.images]
+
+    # Parse completed work images
+    completed_work_images_list: list = []
+    cw_raw = getattr(r, "completed_work_images", None)
+    if cw_raw:
+        try:
+            import json as _j2
+            parsed = _j2.loads(cw_raw)
+            completed_work_images_list = parsed if isinstance(parsed, list) else [parsed]
+        except Exception:
+            completed_work_images_list = [cw_raw]
+
+    return {
+        "id": r.id,
+        "title": r.title,
+        "description": r.description,
+        "urgency_level": r.urgency_level,
+        "priority": getattr(r, "priority", "Normal") or "Normal",
+        "status": r.status or "Reported",
+        "department": r.department or "other",
+        "category": r.category or "General",
+        "location_lat": r.location_lat,
+        "location_long": r.location_long,
+        "location_address": r.location_address,
+        "images": images_list,
+        "completed_work_images": completed_work_images_list,
+        "prediction_confidence": r.prediction_confidence,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+        "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        "user_name": r.user_name,
+        "user_mobile": r.user_mobile,
+        "user_email": r.user_email,
+        "user_id": r.user_id,
+        "confirmation_count": r.confirmation_count or 0,
+    }
+
+
+@app.get("/api/dept-admin/reports")
+async def get_dept_admin_reports(
+    status_filter: Optional[str] = None,
+    priority_filter: Optional[str] = None,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dept admin: get all reports assigned to their department.
+    Includes full location data and images.
+    Super admin sees all reports.
+    """
+    stmt = select(Report).order_by(Report.created_at.desc())
+
+    # Dept admins only see their own department
+    if current_user.role == ROLE_DEPT_ADMIN:
+        dept = getattr(current_user, "department", None)
+        if dept:
+            stmt = stmt.where(Report.department == dept)
+
+    if status_filter and status_filter != "all":
+        stmt = stmt.where(Report.status == status_filter)
+
+    if priority_filter and priority_filter != "all":
+        stmt = stmt.where(Report.priority == priority_filter)
+
+    result = await db.execute(stmt)
+    reports = result.scalars().all()
+
+    return {
+        "department": getattr(current_user, "department", "all"),
+        "total": len(reports),
+        "reports": [_format_report_full(r) for r in reports],
+    }
+
+
+@app.patch("/api/dept-admin/reports/{report_id}/status")
+async def dept_admin_update_status(
+    report_id: int,
+    body: dict = Body(...),
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dept admin updates status of a report in their department."""
+    new_status = body.get("status", "")
+    note = body.get("note", "")  # optional progress note from dept admin
+    valid_statuses = ["Reported", "In Progress", "Resolved", "Rejected"]
+    if new_status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"status must be one of {valid_statuses}")
+
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Dept admin can only update their own department's reports
+    if current_user.role == ROLE_DEPT_ADMIN:
+        if report.department != getattr(current_user, "department", None):
+            raise HTTPException(status_code=403, detail="Not your department's report")
+
+    old_status = report.status
+    report.status = new_status
+    report.updated_at = datetime.utcnow()
+
+    # Record real timestamp in status_history
+    import json as _json_sh
+    now_iso = datetime.utcnow().isoformat()
+    try:
+        history = _json_sh.loads(report.status_history) if report.status_history else []
+        if not isinstance(history, list):
+            history = []
+    except Exception:
+        history = []
+
+    history.append({
+        "status": new_status,
+        "timestamp": now_iso,
+        "note": note or _default_status_note(new_status),
+        "updated_by": getattr(current_user, "full_name", None) or current_user.email,
+    })
+    report.status_history = _json_sh.dumps(history)
+
+    await db.commit()
+    await db.refresh(report)
+
+    # Create notification for report owner
+    if report.user_id:
+        notif_type = "resolved" if new_status == "Resolved" else "status_change"
+        msg = f"Your report #{report_id:05d} '{report.title}' status changed: {old_status} → {new_status}."
+        if new_status == "Resolved":
+            msg += " ✅ Issue has been resolved!"
+        db.add(models.Notification(
+            user_id=report.user_id,
+            report_id=report_id,
+            title=f"Report Status Updated",
+            message=msg,
+            notif_type=notif_type,
+        ))
+        await db.commit()
+
+    return {"message": f"Status updated to {new_status}", "report_id": report_id, "status": new_status}
+
+
+def _default_status_note(status: str) -> str:
+    """Return a default progress note for a given status."""
+    return {
+        "Reported": "Report received and logged.",
+        "In Progress": "Department team has started working on this issue.",
+        "Resolved": "Issue has been resolved by the department.",
+        "Rejected": "Report has been reviewed and rejected.",
+    }.get(status, f"Status updated to {status}.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# UPDATED /reports/ — include images + priority in all report listings
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/admin/reports/all")
+async def get_all_reports_full(
+    status_filter: Optional[str] = None,
+    priority_filter: Optional[str] = None,
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Admin: get all reports with full details (images, location, priority).
+    Dept admins see only their department. Super admins see all.
+    """
+    stmt = select(Report).order_by(Report.created_at.desc())
+
+    if current_user.role == ROLE_DEPT_ADMIN:
+        dept = getattr(current_user, "department", None)
+        if dept:
+            stmt = stmt.where(Report.department == dept)
+
+    if status_filter and status_filter != "all":
+        stmt = stmt.where(Report.status == status_filter)
+
+    if priority_filter and priority_filter != "all":
+        stmt = stmt.where(Report.priority == priority_filter)
+
+    result = await db.execute(stmt)
+    reports = result.scalars().all()
+    return [_format_report_full(r) for r in reports]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STATIC FILES — serve uploaded images
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from fastapi.staticfiles import StaticFiles
+import os as _os
+
+_uploads_dir = _os.path.join(_os.path.dirname(__file__), "uploads")
+if not _os.path.exists(_uploads_dir):
+    _os.makedirs(_uploads_dir, exist_ok=True)
+
+try:
+    app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
+except Exception:
+    pass  # Already mounted
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# HELPER: create status-change notification (called from existing status update)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def _create_status_notification(db: AsyncSession, report: Report, new_status: str):
+    """Create a notification for the report owner when status changes."""
+    if not report.user_id:
+        return
+    notif_type = "resolved" if new_status == "Resolved" else "status_change"
+    msg = f"Your report #{report.id:05d} '{report.title}' is now: {new_status}."
+    if new_status == "Resolved":
+        msg += " ✅ Great news — your issue has been resolved!"
+    elif new_status == "In Progress":
+        msg += " 🔧 Our team is working on it."
+    db.add(models.Notification(
+        user_id=report.user_id,
+        report_id=report.id,
+        title="Report Status Updated",
+        message=msg,
+        notif_type=notif_type,
+    ))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COMPLETED WORK IMAGE UPLOAD — Dept Admin uploads proof of completion
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/dept-admin/reports/{report_id}/completed-work-image")
+async def upload_completed_work_image(
+    report_id: int,
+    image: UploadFile = File(...),
+    current_user: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Dept admin uploads a completed work image (proof of resolution).
+    Multiple images can be uploaded by calling this endpoint multiple times.
+    """
+    # Validate image
+    ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp", "bmp"}
+    ext = ""
+    if image.filename and "." in image.filename:
+        ext = image.filename.rsplit(".", 1)[-1].lower()
+
+    content_type_ok = image.content_type and image.content_type.startswith("image/")
+    extension_ok = ext in ALLOWED_EXTENSIONS
+
+    if not content_type_ok and not extension_ok:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File must be an image. Received content_type='{image.content_type}', filename='{image.filename}'"
+        )
+
+    # Fetch report
+    result = await db.execute(select(Report).where(Report.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Dept admin can only upload for their own department
+    if current_user.role == ROLE_DEPT_ADMIN:
+        if report.department != getattr(current_user, "department", None):
+            raise HTTPException(status_code=403, detail="Not your department's report")
+
+    # Save image
+    upload_dir = _Path("uploads/completed_work")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    import uuid as _uuid
+    file_ext = image.filename.rsplit(".", 1)[-1] if image.filename and "." in image.filename else "jpg"
+    filename = f"{_uuid.uuid4().hex}.{file_ext}"
+    file_path = upload_dir / filename
+    image_bytes = await image.read()
+    file_path.write_bytes(image_bytes)
+    image_url = f"/uploads/completed_work/{filename}"
+
+    # Append to completed_work_images JSON list
+    import json as _j_cw
+    existing = report.completed_work_images
+    if existing:
+        try:
+            img_list = _j_cw.loads(existing)
+            if not isinstance(img_list, list):
+                img_list = [existing]
+        except Exception:
+            img_list = [existing]
+    else:
+        img_list = []
+
+    img_list.append(image_url)
+    report.completed_work_images = _j_cw.dumps(img_list)
+
+    await db.commit()
+    await db.refresh(report)
+
+    # Notify report owner
+    if report.user_id:
+        db.add(models.Notification(
+            user_id=report.user_id,
+            report_id=report_id,
+            title="Work Completed — Photo Added",
+            message=f"The department has uploaded a photo showing the completed work for your report: '{report.title}'.",
+            notif_type="resolved",
+        ))
+        await db.commit()
+
+    return {
+        "message": "Completed work image uploaded successfully",
+        "image_url": image_url,
+        "total_images": len(img_list),
     }
