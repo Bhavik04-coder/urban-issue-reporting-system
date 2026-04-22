@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -221,15 +220,26 @@ class ApiService {
   // ── Feature 2: Image Upload ───────────────────────────
 
   static Future<String> uploadReportImage(
-      String token, int reportId, File imageFile) async {
+      String token, int reportId, List<int> imageBytes, String filename) async {
+    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : 'jpg';
+    final mimeType = switch (ext) {
+      'png'  => 'image/png',
+      'gif'  => 'image/gif',
+      'webp' => 'image/webp',
+      'bmp'  => 'image/bmp',
+      _      => 'image/jpeg',
+    };
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$baseUrl/api/reports/$reportId/image'),
     );
     request.headers['Authorization'] = 'Bearer $token';
-    request.files.add(
-      await http.MultipartFile.fromPath('image', imageFile.path),
-    );
+    request.files.add(http.MultipartFile.fromBytes(
+      'image',
+      imageBytes,
+      filename: filename,
+      contentType: MediaType.parse(mimeType),
+    ));
     final streamed = await request.send().timeout(const Duration(seconds: 30));
     final res = await http.Response.fromStream(streamed);
     final data = jsonDecode(res.body) as Map<String, dynamic>;
@@ -540,6 +550,158 @@ class ApiService {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
     throw 'Failed to load stats';
+  }
+
+  // ── Notifications ─────────────────────────────────────
+
+  static Future<Map<String, dynamic>> getNotifications(String token,
+      {bool unreadOnly = false}) async {
+    final params = unreadOnly ? '?unread_only=true' : '';
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/notifications$params'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw 'Failed to load notifications';
+  }
+
+  static Future<void> markNotificationRead(String token, int notifId) async {
+    await http
+        .patch(
+          Uri.parse('$baseUrl/api/notifications/$notifId/read'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 10));
+  }
+
+  static Future<void> markAllNotificationsRead(String token) async {
+    await http
+        .patch(
+          Uri.parse('$baseUrl/api/notifications/read-all'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 10));
+  }
+
+  // ── Priority (Super Admin) ────────────────────────────
+
+  static Future<void> updateReportPriority(
+      String token, int reportId, String priority) async {
+    final res = await http
+        .patch(
+          Uri.parse('$baseUrl/api/super-admin/reports/$reportId/priority'),
+          headers: _headers(token: token),
+          body: jsonEncode({'priority': priority}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      throw _extractError(data, 'Failed to update priority');
+    }
+  }
+
+  // ── Dept Admin Reports ────────────────────────────────
+
+  static Future<Map<String, dynamic>> getDeptAdminReports(
+    String token, {
+    String? statusFilter,
+    String? priorityFilter,
+  }) async {
+    final params = <String>[];
+    if (statusFilter != null && statusFilter != 'all') {
+      params.add('status_filter=${Uri.encodeComponent(statusFilter)}');
+    }
+    if (priorityFilter != null && priorityFilter != 'all') {
+      params.add('priority_filter=${Uri.encodeComponent(priorityFilter)}');
+    }
+    final query = params.isNotEmpty ? '?${params.join('&')}' : '';
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/dept-admin/reports$query'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw 'Failed to load department reports';
+  }
+
+  static Future<void> deptAdminUpdateStatus(
+      String token, int reportId, String newStatus) async {
+    final res = await http
+        .patch(
+          Uri.parse('$baseUrl/api/dept-admin/reports/$reportId/status'),
+          headers: _headers(token: token),
+          body: jsonEncode({'status': newStatus}),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      throw _extractError(data, 'Failed to update status');
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadCompletedWorkImage(
+      String token, int reportId, List<int> imageBytes, String filename) async {
+    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : 'jpg';
+    final mimeType = switch (ext) {
+      'png'  => 'image/png',
+      'gif'  => 'image/gif',
+      'webp' => 'image/webp',
+      'bmp'  => 'image/bmp',
+      _      => 'image/jpeg',
+    };
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/api/dept-admin/reports/$reportId/completed-work-image'),
+    );
+    request.headers['Authorization'] = 'Bearer $token';
+    request.files.add(http.MultipartFile.fromBytes(
+      'image',
+      imageBytes,
+      filename: filename,
+      contentType: MediaType.parse(mimeType),
+    ));
+
+    final streamedRes = await request.send().timeout(const Duration(seconds: 30));
+    final res = await http.Response.fromStream(streamedRes);
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw 'Server error (${res.statusCode}): ${res.body.length > 200 ? res.body.substring(0, 200) : res.body}';
+    }
+
+    if (res.statusCode == 200) return data;
+    throw _extractError(data, 'Failed to upload completed work image');
+  }
+
+  // ── Admin Reports (full, with images + priority) ──────
+
+  static Future<List<dynamic>> getAllReportsFull(String token,
+      {String? statusFilter, String? priorityFilter}) async {
+    final params = <String>[];
+    if (statusFilter != null && statusFilter != 'all') {
+      params.add('status_filter=${Uri.encodeComponent(statusFilter)}');
+    }
+    if (priorityFilter != null && priorityFilter != 'all') {
+      params.add('priority_filter=${Uri.encodeComponent(priorityFilter)}');
+    }
+    final query = params.isNotEmpty ? '?${params.join('&')}' : '';
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/api/admin/reports/all$query'),
+          headers: _headers(token: token),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) return jsonDecode(res.body) as List<dynamic>;
+    throw 'Failed to load reports';
   }
 
   // ── Helpers ───────────────────────────────────────────

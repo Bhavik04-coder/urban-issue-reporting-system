@@ -127,6 +127,16 @@ class Report(Base):
     # Upvote / confirmation count
     confirmation_count = Column(Integer, default=0)
 
+    # Priority (set by super admin): "Normal" | "High" | "Critical" | "Urgent"
+    priority = Column(String(20), default="Normal", nullable=False)
+
+    # Completed work images (uploaded by dept admin when resolving)
+    completed_work_images = Column(Text, nullable=True)  # JSON list of image paths
+
+    # Status history: JSON list of {status, timestamp, note} — records real timestamps
+    # when dept admin changes status, used to build accurate timeline
+    status_history = Column(Text, nullable=True)  # JSON list
+
 
 # ── Confirmations ─────────────────────────────────────────────────────────────
 class Confirmation(Base):
@@ -185,6 +195,23 @@ class DepartmentStats(Base):
     calculated_at = Column(DateTime, default=datetime.utcnow)
 
     department = relationship("Department", back_populates="stats")
+
+
+class Notification(Base):
+    """In-app notifications for users and admins."""
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)   # None = broadcast
+    report_id = Column(Integer, ForeignKey("reports.id"), nullable=True)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    notif_type = Column(String(50), default="info")  # info | status_change | priority_change | resolved | urgent
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    report = relationship("Report")
 
 
 class DepartmentFeedback(Base):

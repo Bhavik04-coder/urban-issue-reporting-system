@@ -6,6 +6,7 @@ import 'admin_dashboard_tab.dart';
 import 'admin_reports_tab.dart';
 import 'admin_map_tab.dart';
 import 'admin_dept_tab.dart';
+import 'dept_admin_reports_screen.dart';
 import '../profile/profile_screen.dart';
 
 class AdminShell extends StatefulWidget {
@@ -18,24 +19,34 @@ class AdminShell extends StatefulWidget {
 class _AdminShellState extends State<AdminShell> {
   int _idx = 0;
 
-  final _tabs = const [
-    AdminDashboardTab(),
-    AdminReportsTab(),
-    AdminMapTab(),
-    AdminDeptTab(),
-    ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final role = auth.user?.role ?? 'user';
     final dept = auth.adminDepartment;
+    final isDeptAdmin = auth.isDeptAdmin;
+
+    // Dept admins get a dedicated reports tab instead of the generic one
+    final tabs = isDeptAdmin
+        ? const [
+            AdminDashboardTab(),
+            DeptAdminReportsScreen(),
+            AdminMapTab(),
+            AdminDeptTab(),
+            ProfileScreen(),
+          ]
+        : const [
+            AdminDashboardTab(),
+            AdminReportsTab(),
+            AdminMapTab(),
+            AdminDeptTab(),
+            ProfileScreen(),
+          ];
 
     return Scaffold(
       body: Stack(
         children: [
-          IndexedStack(index: _idx, children: _tabs),
+          IndexedStack(index: _idx, children: tabs),
           // Role badge — top right corner
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
