@@ -405,7 +405,7 @@ class UserProfileResponse(BaseModel):
     is_admin: bool
     role: Optional[str] = "user"
     department: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
