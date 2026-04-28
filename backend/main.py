@@ -850,6 +850,87 @@ async def delete_own_report(
         "report_id": report_id
     }
 
+# Edit user's own report
+class ReportEditRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    urgency_level: Optional[str] = None
+
+    @field_validator('title')
+    def validate_title(cls, v):
+        if v is not None:
+            if not v.strip():
+                raise ValueError('Title cannot be empty')
+            if len(v.strip()) < 5:
+                raise ValueError('Title must be at least 5 characters long')
+        return v.strip() if v else v
+
+    @field_validator('description')
+    def validate_description(cls, v):
+        if v is not None:
+            if not v.strip():
+                raise ValueError('Description cannot be empty')
+            if len(v.strip()) < 10:
+                raise ValueError('Description must be at least 10 characters long')
+        return v.strip() if v else v
+
+    @field_validator('urgency_level')
+    def validate_urgency_level(cls, v):
+        if v is not None and v not in ["High", "Medium", "Low"]:
+            raise ValueError('Urgency level must be High, Medium, or Low')
+        return v
+
+@app.patch("/api/users/reports/{report_id}")
+async def edit_own_report(
+    report_id: int,
+    edit_data: ReportEditRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Allow users to edit their own reports (title, description, urgency).
+    Only allowed while the report is still in 'Reported' status.
+    """
+    result = await db.execute(select(Report).filter(Report.id == report_id))
+    db_report = result.scalar_one_or_none()
+
+    if db_report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Report with ID {report_id} not found"
+        )
+
+    if db_report.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only edit your own reports"
+        )
+
+    if db_report.status not in ("Reported", None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reports can only be edited while in 'Reported' status"
+        )
+
+    if edit_data.title is not None:
+        db_report.title = edit_data.title
+    if edit_data.description is not None:
+        db_report.description = edit_data.description
+    if edit_data.urgency_level is not None:
+        db_report.urgency_level = edit_data.urgency_level
+
+    await db.commit()
+    await db.refresh(db_report)
+
+    return {
+        "message": "Report updated successfully",
+        "report_id": db_report.id,
+        "title": db_report.title,
+        "description": db_report.description,
+        "urgency_level": db_report.urgency_level,
+    }
+
+
 # Get all categories
 @app.get("/categories")
 async def get_categories(db: AsyncSession = Depends(get_db)):

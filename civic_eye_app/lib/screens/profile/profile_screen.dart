@@ -74,13 +74,32 @@ class ProfileScreen extends StatelessWidget {
                   ).animate().scale(duration: 500.ms, curve: Curves.elasticOut),
 
                   const SizedBox(height: 16),
-                  Text(user?.fullName ?? 'User',
-                      style: TextStyle(
-                          color: textPrimary,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700))
-                      .animate(delay: 100.ms)
-                      .fadeIn(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(user?.fullName ?? 'User',
+                          style: TextStyle(
+                              color: textPrimary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700)),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _showEditDialog(context, auth),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withAlpha(25),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: AppTheme.primary.withAlpha(60)),
+                          ),
+                          child: const Icon(Icons.edit_rounded,
+                              color: AppTheme.primary, size: 14),
+                        ),
+                      ),
+                    ],
+                  ).animate(delay: 100.ms).fadeIn(),
                   const SizedBox(height: 4),
                   Text(user?.email ?? '',
                       style: TextStyle(
@@ -307,52 +326,118 @@ class ProfileScreen extends StatelessWidget {
         TextEditingController(text: auth.user?.fullName ?? '');
     final mobileCtrl =
         TextEditingController(text: auth.user?.mobile ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    bool isSaving = false;
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: AppTheme.surfaceCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Edit Profile',
-            style: TextStyle(color: AppTheme.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: const InputDecoration(
-                  labelText: 'Full Name',
-                  prefixIcon: Icon(Icons.person_outline,
-                      color: AppTheme.textSecondary, size: 20)),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setState) {
+          return AlertDialog(
+            backgroundColor: AppTheme.surfaceCard,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20)),
+            title: const Row(
+              children: [
+                Icon(Icons.edit_rounded,
+                    color: AppTheme.primary, size: 20),
+                SizedBox(width: 10),
+                Text('Edit Profile',
+                    style: TextStyle(color: AppTheme.textPrimary)),
+              ],
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: mobileCtrl,
-              style: const TextStyle(color: AppTheme.textPrimary),
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                  labelText: 'Mobile',
-                  prefixIcon: Icon(Icons.phone_outlined,
-                      color: AppTheme.textSecondary, size: 20)),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameCtrl,
+                    style:
+                        const TextStyle(color: AppTheme.textPrimary),
+                    decoration: const InputDecoration(
+                      labelText: 'Full Name',
+                      prefixIcon: Icon(Icons.person_outline,
+                          color: AppTheme.textSecondary, size: 20),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Name cannot be empty';
+                      }
+                      if (v.trim().length < 2) {
+                        return 'Name must be at least 2 characters';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  TextFormField(
+                    controller: mobileCtrl,
+                    style:
+                        const TextStyle(color: AppTheme.textPrimary),
+                    keyboardType: TextInputType.phone,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile',
+                      prefixIcon: Icon(Icons.phone_outlined,
+                          color: AppTheme.textSecondary, size: 20),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Mobile cannot be empty';
+                      }
+                      if (!RegExp(r'^\d{10}$').hasMatch(v.trim())) {
+                        return 'Enter a valid 10-digit mobile number';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppTheme.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await auth.updateProfile(
-                  fullName: nameCtrl.text, mobile: mobileCtrl.text);
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed:
+                    isSaving ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel',
+                    style:
+                        TextStyle(color: AppTheme.textSecondary)),
+              ),
+              ElevatedButton.icon(
+                icon: isSaving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Icon(Icons.check_rounded, size: 16),
+                label: Text(isSaving ? 'Saving…' : 'Save Changes'),
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        if (!formKey.currentState!.validate()) return;
+                        setState(() => isSaving = true);
+                        await auth.updateProfile(
+                          fullName: nameCtrl.text.trim(),
+                          mobile: mobileCtrl.text.trim(),
+                        );
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content:
+                                  Text('Profile updated successfully'),
+                              backgroundColor: AppTheme.secondary,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
