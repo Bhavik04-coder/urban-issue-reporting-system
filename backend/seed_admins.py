@@ -1,5 +1,5 @@
 """
-Seed the two real admin users into the database.
+Seed the default admin user into the database.
 Run with: python seed_admins.py
 """
 import asyncio
@@ -12,11 +12,10 @@ from app.auth_utils import get_password_hash
 from sqlalchemy.future import select
 
 ADMINS = [
-    {"email": "atharv@urbansim.com", "full_name": "Atharv Mulik", "mobile": "9876543210"},
-    {"email": "siddhi@urbansim.com",  "full_name": "Siddhi Naik",  "mobile": "9123456780"},
+    {"email": "admin@example.com", "full_name": "Admin", "mobile": ""},
 ]
 
-# Default password — admins should change this after first login
+# Default password — change this after first login
 DEFAULT_PASSWORD = "Admin@1234"
 
 

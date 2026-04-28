@@ -542,6 +542,32 @@ class ApiService {
     }
   }
 
+  // Edit user's own report
+  static Future<void> editOwnReport(
+    String token,
+    int reportId, {
+    String? title,
+    String? description,
+    String? urgencyLevel,
+  }) async {
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title;
+    if (description != null) body['description'] = description;
+    if (urgencyLevel != null) body['urgency_level'] = urgencyLevel;
+
+    final res = await http
+        .patch(
+          Uri.parse('$baseUrl/api/users/reports/$reportId'),
+          headers: _headers(token: token),
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode != 200) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      throw _extractError(data, 'Failed to update report');
+    }
+  }
+
   static Future<Map<String, dynamic>> getDashboardStats() async {
     final res = await http
         .get(Uri.parse('$baseUrl/dashboard/stats'))

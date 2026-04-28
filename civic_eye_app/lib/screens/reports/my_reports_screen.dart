@@ -359,6 +359,16 @@ class _ReportTile extends StatelessWidget {
                           fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 8),
+                // Edit button
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined,
+                      size: 20, color: AppTheme.primary),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Edit report',
+                  onPressed: () => _showEditDialog(context),
+                ),
+                const SizedBox(width: 4),
                 // Delete button
                 IconButton(
                   icon: Icon(Icons.delete_outline_rounded,
@@ -429,6 +439,187 @@ class _ReportTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _showEditDialog(BuildContext context) {
+    if (report.status != 'Reported') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Reports can only be edited while in "Reported" status. Current: ${report.status}'),
+          backgroundColor: AppTheme.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final titleCtrl = TextEditingController(text: report.title);
+    final descCtrl = TextEditingController(text: report.description);
+    String selectedUrgency = report.urgency;
+    final formKey = GlobalKey<FormState>();
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: cardColor,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.edit_outlined,
+                  color: AppTheme.primary, size: 20),
+              const SizedBox(width: 10),
+              Text('Edit Report',
+                  style: TextStyle(
+                      color: textPrimary, fontWeight: FontWeight.w700)),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: titleCtrl,
+                    style: TextStyle(color: textPrimary, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Title',
+                      labelStyle: TextStyle(color: textSecondary),
+                      prefixIcon: Icon(Icons.title_rounded,
+                          color: textSecondary, size: 18),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Title cannot be empty';
+                      if (v.trim().length < 5) return 'At least 5 characters';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: descCtrl,
+                    style: TextStyle(color: textPrimary, fontSize: 14),
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: 'Description',
+                      labelStyle: TextStyle(color: textSecondary),
+                      prefixIcon: Icon(Icons.description_outlined,
+                          color: textSecondary, size: 18),
+                      alignLabelWithHint: true,
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Description cannot be empty';
+                      if (v.trim().length < 10) return 'At least 10 characters';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedUrgency,
+                    dropdownColor: cardColor,
+                    style: TextStyle(color: textPrimary, fontSize: 14),
+                    decoration: InputDecoration(
+                      labelText: 'Urgency',
+                      labelStyle: TextStyle(color: textSecondary),
+                      prefixIcon: Icon(Icons.priority_high_rounded,
+                          color: textSecondary, size: 18),
+                    ),
+                    items: ['High', 'Medium', 'Low']
+                        .map((u) => DropdownMenuItem(
+                              value: u,
+                              child: Text(u,
+                                  style: TextStyle(color: textPrimary)),
+                            ))
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) setState(() => selectedUrgency = v);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSaving ? null : () => Navigator.pop(ctx),
+              child: Text('Cancel',
+                  style: TextStyle(color: textSecondary)),
+            ),
+            ElevatedButton.icon(
+              icon: isSaving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.check_rounded, size: 16),
+              label: Text(isSaving ? 'Saving…' : 'Save'),
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setState(() => isSaving = true);
+                      await _editReport(
+                        context,
+                        title: titleCtrl.text.trim(),
+                        description: descCtrl.text.trim(),
+                        urgency: selectedUrgency,
+                      );
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editReport(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required String urgency,
+  }) async {
+    final auth = context.read<AuthProvider>();
+    if (auth.token == null || report.id == null) return;
+    try {
+      await ApiService.editOwnReport(
+        auth.token!,
+        report.id!,
+        title: title,
+        description: description,
+        urgencyLevel: urgency,
+      );
+      if (auth.user != null) {
+        await context
+            .read<ReportProvider>()
+            .loadUserReports(auth.user!.email, token: auth.token);
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Report updated successfully'),
+            backgroundColor: AppTheme.secondary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update: $e'),
+            backgroundColor: AppTheme.accent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _showDeleteDialog(BuildContext context) {

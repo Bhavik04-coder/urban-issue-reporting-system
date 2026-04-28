@@ -46,10 +46,8 @@ flutter run -d chrome
 
 ### Super Admins
 
-| Name         | Email                | Password    | Admin ID     |
-|--------------|----------------------|-------------|--------------|
-| Atharv Mulik | atharv@urbansim.com  | Admin@1234  | ADM-2024-001 |
-| Siddhi Naik  | siddhi@urbansim.com  | Admin@1234  | ADM-2024-002 |
+| Email    | admin@example.com |
+| Password | Admin@1234        |
 
 ### Department Admins
 
@@ -70,6 +68,7 @@ flutter run -d chrome
 - **Report Tracking** — Follow your report from submission to resolution
 - **Completion Photos** — See proof of completed work uploaded by the department
 - **Notifications** — Get notified on status changes and when work is completed
+- **Edit Own Reports** — Edit title, description, and urgency while the report is still in "Reported" status
 - **Delete Own Reports** — Remove reports you submitted
 - **Light / Dark Theme** — Toggle in Profile → Settings, preference is saved
 
@@ -103,6 +102,7 @@ flutter run -d chrome
 |-----------------------------------|:----:|:----------:|:-----------:|
 | Submit reports                    | ✅   |            |             |
 | View own reports                  | ✅   |            |             |
+| Edit own reports (title, description, urgency)  | ✅   |            |             |
 | Delete own reports                | ✅   |            |             |
 | View department reports           |      | ✅         |             |
 | Update report status              |      | ✅         | ✅          |
@@ -216,6 +216,7 @@ PUT   /api/users/me
 # Reports (user)
 POST  /api/reports/smart                          AI report with image
 GET   /api/users/reports/filtered                 User's own reports
+PATCH /api/users/reports/{id}                     Edit own report (title, description, urgency)
 DELETE /api/users/reports/{id}                    Delete own report
 
 # Reports (admin)
